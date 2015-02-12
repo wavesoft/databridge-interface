@@ -1,0 +1,169 @@
+#!/bin/bash
+#
+# DataBridge Server Synchronization Script for simple projects
+# Copyright (C) 2014-2015  Ioannis Charalampidis, PH-SFT, CERN
+
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+
+# Where the server configuration of DataBridge server-sync is located
+CONFIG_FILE="/etc/databridge/server.conf"
+
+function put_jobfile {
+	local FILE=$1
+
+	# Validate file
+	[ ! -f ${FILE} ] && echo "ERROR: File $FILE does not exist" && return 1
+
+	# Get file UUID
+	local JOB_ID=$(uuidgen)	
+
+	# Upload file on input queue
+	echo "INFO: Uploading job file ${FILE}"
+	curl -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+	[ $? -ne 0 ] && return 1
+	
+	# Upload job ID on FIFO	
+	echo "INFO: Uploading job description"
+	curl -X PUT -F "userdata=${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
+	if [ $? -ne 0 ]; then
+		# Remove from queue
+		echo "ERROR: Could not upload job description, removing job file"
+		curl --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}" 2>/dev/null >/dev/null
+		# Return error
+		return 1
+	fi
+	
+	# Successfuly placed, update state file
+	echo "INFO: Job ${JOB_ID} placed in queue"
+	echo "$JOB_ID:$(date +%s)" >> $DATABRIDGE_JOB_LIST
+
+	# Return 0
+	return 0
+}
+
+function get_outfile {
+	local JOB_ID=$1
+
+	# Try to get job file from output directory
+		curl -o "${DATABRIDGE_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	[ $? -ne 0 ] && return 1
+
+	# Return 0
+	return 0
+}
+
+function upload_jobs {
+	local COUNTER=0
+	local FILE=""
+
+	# Start submitting jobs
+	for FILE in ${DATABRIDGE_INPUT_DIR}/*; do
+
+		# Put job file
+		put_jobfile $FILE
+
+		# Upon successful placement, remove
+		rm $FILE
+
+		# Increment counter
+		let COUNTER+=1
+		if [ $COUNTER -gt ${DATABRIDGE_UPLOAD_BULK_SIZE} ]; then
+			echo "INFO: Reached limit of ${DATABRIDGE_UPLOAD_BULK_SIZE} jobs per submission"
+			break
+		fi
+
+	done
+
+}
+
+function download_jobs {
+	local STALE_COUNTER=0
+	local JOB_ID=""
+	local JOB_TS=""
+	local JOB=""
+
+	# Prepare rotation file
+	echo -n "" > ${DATABRIDGE_JOB_LIST}.rotate
+
+	# Start reading the state file
+	while read JOB; do
+
+		# Skip empty lines
+		[ -z "$JOB" ] && continue
+
+		# Drain staled state
+		if [ $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ]; then
+			echo "$JOB" >> ${DATABRIDGE_JOB_LIST}.rotate
+			continue
+		fi
+
+		# Get job info
+		JOB_ID=$(echo "$JOB" | awk -F':' '{print $1}')
+		JOB_TS=$(echo "$JOB" | awk -F':' '{print $2}')
+
+		# Check for expired
+		let DELTA=$(date +%s)-${JOB_TS}
+		if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+			echo "WARN: Job ${JOB_ID} expired after ${DELTA} seconds"
+		else
+			# Try to get job file
+			get_outfile ${JOB_ID}
+			# If we didn't manage, re-schedule attempt later
+			if [ $? -ne 0 ]; then
+				# Process later
+				echo "$JOB" >> ${DATABRIDGE_JOB_LIST}.rotate
+				# Increment stale counter
+				let STALE_COUNTER+=1
+				# Warn for stale
+				[  $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ] && echo "WARN: Too many input jobs without data. Reading staled!"
+			else
+				echo "INFO: Job ${JOB_ID} completed"
+				# Reset stale counter
+				STALE_COUNTER=0
+			fi
+		fi
+
+	done < ${DATABRIDGE_JOB_LIST}
+
+	# Rotate state files
+	mv ${DATABRIDGE_JOB_LIST}.rotate ${DATABRIDGE_JOB_LIST}
+
+}
+
+# Lookup for the config
+if [ ! -f ${CONFIG_FILE} ]; then
+	echo "ERROR: Could not find databridge server configuration in ${CONFIG_FILE}!"
+	exit 1
+fi
+
+# Source config
+. ${CONFIG_FILE}
+
+# Make sure we have input/output directories
+mkdir -p ${DATABRIDGE_INPUT_DIR}
+mkdir -p ${DATABRIDGE_OUTPUT_DIR}
+mkdir -p $(dirname ${DATABRIDGE_JOB_LIST})
+
+# Start by downloading jobs
+echo "INFO: Downloading job outputs from DataBridge"
+download_jobs
+
+# Then upload jobs
+echo "INFO: Uploading new jobs to DataBridge"
+upload_jobs
+
+# We are done
+echo "INFO: DataBridge synchronization completed"
