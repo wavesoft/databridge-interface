@@ -34,7 +34,7 @@ function get_jobfile {
         local JOBDIR=$1
 
         # Get a job ID from the queue
-        local JOB_ID=$(curl -u "${BOINC_USER}:${BOINC_AUTHENTICATOR}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
+        local JOB_ID=$(curl -u "${BOINC_USER}:${BOINC_AUTHENTICATOR}" --header "userID: ${BOINC_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
         # If queue is not empty, return
         [ -z "$JOB_ID" ] && return 1
 

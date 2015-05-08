@@ -37,11 +37,11 @@ function put_jobfile {
 	
 	# Upload job ID on FIFO	
 	echo "INFO: Uploading job description"
-	curl -f -X PUT -F "userdata=${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
+	curl -f -X PUT -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
 	if [ $? -ne 0 ]; then
 		# Remove from queue
 		echo "ERROR: Could not upload job description, removing job file"
-		curl -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}" > /dev/null
 		# Return error
 		return 1
 	fi
