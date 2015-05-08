@@ -85,24 +85,24 @@ function get_outfile {
 	if [ ! -d "${JOB_OUTPUT_DIR}" ]; then
 
 		# Create directory
-		mkdir -p "${JOB_OUTPUT_DIR}"
+		mkdir -p "${JOB_OUTPUT_DIR}" 2>/dev/null
 		[ $? -ne 0 ] && echo "ERROR: Could not create directory ${JOB_OUTPUT_DIR}" && return 1
 
 		# Change owner if reuqired
 		if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
-			chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}"
+			chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}" 2>/dev/null
 			[ $? -ne 0 ] && echo "ERROR: Could not change ownership of ${JOB_OUTPUT_DIR}" && return 1
 		fi
 
 	fi
 
 	# Move file to the proper location
-	mv "${F_JOB}" "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz"
+	mv "${F_JOB}" "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" 2>/dev/null
 	[ $? -ne 0 ] && echo "ERROR: Could not move job file to ${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" && return 1
 
 	# Change owner if reuqired
 	if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
-		chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz"
+		chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" 2>/dev/null
 		[ $? -ne 0 ] && echo "ERROR: Could not change ownership of ${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" && return 1
 	fi
 
