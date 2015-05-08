@@ -57,11 +57,27 @@ function put_jobfile {
 function get_outfile {
 	local JOB_ID=$1
 
-	# Calculate the name of the output folder
-	JOB_DATE=$(date +%Y%m%d)
-	JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/${JOB_DATE}"
+	# Temporary files
+	local F_JOB="${TMP_DIR}/jobout.tar.gz"
+	local F_HEADERS="${TMP_DIR}/headers.txt"
+
+	# Try to get job file from output directory into the temporary files
+	curl -o "${F_JOB}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -D "${F_HEADERS}" -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" 2>/dev/null >/dev/null
+	[ $? -ne 0 ] && return 1
+
+	# Try to get Last-Modified header from file
+	local H_LAST_MODIFIED=$(cat ${F_HEADERS} | grep Last-Modified | awk -F': ' '{print $2}')
+
+	# Fallback to 'now' if we don't have a Last-Modified header
+	local JOB_DATE=""
+	if [ -z "${H_LAST_MODIFIED}" ]; then
+		JOB_DATE=$(date +%Y%m%d)
+	else
+		JOB_DATE=$(date +%Y%m%d -d "${H_LAST_MODIFIED}")
+	fi
 
 	# Make sure directory exists
+	local JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/${JOB_DATE}"
 	if [ ! -d "${JOB_OUTPUT_DIR}" ]; then
 
 		# Create directory
@@ -72,9 +88,8 @@ function get_outfile {
 
 	fi
 
-	# Try to get job file from output directory
-	curl -o "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" 2>/dev/null >/dev/null
-	[ $? -ne 0 ] && return 1
+	# Move file to the proper location
+	mv "${F_JOB}" "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz"
 
 	# Change owner if reuqired
 	[ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ] && chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz"
@@ -182,6 +197,9 @@ mkdir -p ${DATABRIDGE_INPUT_DIR}
 mkdir -p ${DATABRIDGE_OUTPUT_DIR}
 mkdir -p $(dirname ${DATABRIDGE_JOB_LIST})
 
+# Create a temporary directory
+TMP_DIR=$(mktemp -d)
+
 # Start by downloading jobs
 echo "INFO: Downloading job outputs from DataBridge"
 download_jobs
@@ -189,6 +207,9 @@ download_jobs
 # Then upload jobs
 echo "INFO: Uploading new jobs to DataBridge"
 upload_jobs
+
+# Remove temporary directory
+rm -rf "${TMP_DIR}"
 
 # We are done
 echo "INFO: DataBridge synchronization completed"
