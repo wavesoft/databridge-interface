@@ -76,7 +76,11 @@ function upload_jobs {
 		put_jobfile $FILE
 
 		# Upon successful placement, remove
-		rm $FILE
+		if [ $? -eq 0 ]; then
+			rm $FILE
+		else
+			echo "ERROR: Could not upload file $FILE, will try later"
+		fi
 
 		# Increment counter
 		let COUNTER+=1
@@ -143,6 +147,7 @@ function download_jobs {
 
 }
 
+# Check for override in the config file
 # Lookup for the config
 if [ ! -f ${CONFIG_FILE} ]; then
 	echo "ERROR: Could not find databridge server configuration in ${CONFIG_FILE}!"
