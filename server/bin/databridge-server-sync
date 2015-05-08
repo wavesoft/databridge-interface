@@ -32,12 +32,12 @@ function put_jobfile {
 
 	# Upload file on input queue
 	echo "INFO: Uploading job file ${FILE}"
-	curl -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+	curl -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}" 2>/dev/null >/dev/null
 	[ $? -ne 0 ] && return 1
 	
 	# Upload job ID on FIFO	
 	echo "INFO: Uploading job description"
-	curl -X PUT -F "userdata=${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
+	curl -X PUT -F "userdata=${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}" 2>/dev/null >/dev/null
 	if [ $? -ne 0 ]; then
 		# Remove from queue
 		echo "ERROR: Could not upload job description, removing job file"
@@ -73,7 +73,7 @@ function get_outfile {
 	fi
 
 	# Try to get job file from output directory
-	curl -o "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	curl -o "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" 2>/dev/null >/dev/null
 	[ $? -ne 0 ] && return 1
 
 	# Change owner if reuqired
