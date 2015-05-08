@@ -32,13 +32,16 @@ function put_jobfile {
 
 	# Upload file on input queue
 	echo "INFO: Uploading job file ${FILE}"
+	curl -f -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 	[ $? -ne 0 ] && return 1
 	
 	# Upload job ID on FIFO	
 	echo "INFO: Uploading job description"
+	curl -f -X PUT -F "userdata=${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
 	if [ $? -ne 0 ]; then
 		# Remove from queue
 		echo "ERROR: Could not upload job description, removing job file"
+		curl -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 		# Return error
 		return 1
 	fi
@@ -64,6 +67,7 @@ function get_outfile {
 	F_HEADERS="${TMP_DIR}/headers.txt"
 
 	# Try to get job file from output directory into the temporary files
+	curl -f -o "${F_JOB}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -D "${F_HEADERS}" -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
 	[ $? -ne 0 ] && return 1
 
 	# Try to get Last-Modified header from response
