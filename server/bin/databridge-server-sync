@@ -56,20 +56,24 @@ function put_jobfile {
 
 function get_outfile {
 	local JOB_ID=$1
+	local F_JOB=""
+	local F_HEADERS=""
+	local H_LAST_MODIFIED=""
+	local JOB_DATE=""
+	local JOB_OUTPUT_DIR=""
 
 	# Temporary files
-	local F_JOB="${TMP_DIR}/jobout.tar.gz"
-	local F_HEADERS="${TMP_DIR}/headers.txt"
+	F_JOB="${TMP_DIR}/jobout.tar.gz"
+	F_HEADERS="${TMP_DIR}/headers.txt"
 
 	# Try to get job file from output directory into the temporary files
 	curl -o "${F_JOB}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -D "${F_HEADERS}" -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" 2>/dev/null >/dev/null
 	[ $? -ne 0 ] && return 1
 
-	# Try to get Last-Modified header from file
-	local H_LAST_MODIFIED=$(cat ${F_HEADERS} | grep Last-Modified | awk -F': ' '{print $2}')
+	# Try to get Last-Modified header from response
+	H_LAST_MODIFIED=$(cat ${F_HEADERS} | grep Last-Modified | awk -F': ' '{print $2}')
 
 	# Fallback to 'now' if we don't have a Last-Modified header
-	local JOB_DATE=""
 	if [ -z "${H_LAST_MODIFIED}" ]; then
 		JOB_DATE=$(date +%Y%m%d)
 	else
@@ -77,7 +81,7 @@ function get_outfile {
 	fi
 
 	# Make sure directory exists
-	local JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/${JOB_DATE}"
+	JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/${JOB_DATE}"
 	if [ ! -d "${JOB_OUTPUT_DIR}" ]; then
 
 		# Create directory
@@ -131,9 +135,10 @@ function download_jobs {
 	local JOB_ID=""
 	local JOB_TS=""
 	local JOB=""
+	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
 
 	# Prepare rotation file
-	echo -n "" > ${DATABRIDGE_JOB_LIST}.rotate
+	echo -n "" > ${ROTATE_FILE}
 
 	# Start reading the state file
 	while read JOB; do
@@ -143,7 +148,7 @@ function download_jobs {
 
 		# Drain staled state
 		if [ $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ]; then
-			echo "$JOB" >> ${DATABRIDGE_JOB_LIST}.rotate
+			echo "$JOB" >> ${ROTATE_FILE}
 			continue
 		fi
 
@@ -161,7 +166,7 @@ function download_jobs {
 			# If we didn't manage, re-schedule attempt later
 			if [ $? -ne 0 ]; then
 				# Process later
-				echo "$JOB" >> ${DATABRIDGE_JOB_LIST}.rotate
+				echo "$JOB" >> ${ROTATE_FILE}
 				# Increment stale counter
 				let STALE_COUNTER+=1
 				# Warn for stale
@@ -175,8 +180,8 @@ function download_jobs {
 
 	done < ${DATABRIDGE_JOB_LIST}
 
-	# Rotate state files
-	mv ${DATABRIDGE_JOB_LIST}.rotate ${DATABRIDGE_JOB_LIST}
+	# Rotate state file
+	mv ${ROTATE_FILE} ${DATABRIDGE_JOB_LIST}
 
 }
 
