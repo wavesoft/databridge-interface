@@ -121,7 +121,7 @@ function upload_jobs {
 
 		# Increment counter
 		let COUNTER+=1
-		if [ $COUNTER -gt ${DATABRIDGE_UPLOAD_BULK_SIZE} ]; then
+		if [ $COUNTER -ge ${DATABRIDGE_UPLOAD_BULK_SIZE} ]; then
 			echo "INFO: Reached limit of ${DATABRIDGE_UPLOAD_BULK_SIZE} jobs per submission"
 			break
 		fi
@@ -181,7 +181,7 @@ function download_jobs {
 	done < ${DATABRIDGE_JOB_LIST}
 
 	# Rotate state file
-	mv ${ROTATE_FILE} ${DATABRIDGE_JOB_LIST}
+	cp -f --no-preserve=mode,ownership ${ROTATE_FILE} ${DATABRIDGE_JOB_LIST}
 
 }
 
