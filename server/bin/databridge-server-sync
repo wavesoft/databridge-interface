@@ -58,7 +58,7 @@ function get_outfile {
 	local JOB_ID=$1
 
 	# Try to get job file from output directory
-		curl -o "${DATABRIDGE_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	curl -o "${DATABRIDGE_OUTPUT_DIR}/${JOB_ID}.tar.gz" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
 	[ $? -ne 0 ] && return 1
 
 	# Return 0
@@ -148,6 +148,8 @@ function download_jobs {
 }
 
 # Check for override in the config file
+[ ! -z "$1" ] && CONFIG_FILE=$1
+
 # Lookup for the config
 if [ ! -f ${CONFIG_FILE} ]; then
 	echo "ERROR: Could not find databridge server configuration in ${CONFIG_FILE}!"
