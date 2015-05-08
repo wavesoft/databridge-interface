@@ -41,7 +41,7 @@ function put_jobfile {
 	if [ $? -ne 0 ]; then
 		# Remove from queue
 		echo "ERROR: Could not upload job description, removing job file"
-		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}" > /dev/null
+		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 		# Return error
 		return 1
 	fi
@@ -97,6 +97,10 @@ function get_outfile {
 
 	# Change owner if reuqired
 	[ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ] && chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz"
+
+	# Everything worked as expected, delete output (cleanup)
+	curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	[ $? -ne 0 ] && echo "WARNING: Unable to clean job output of job ${JOB_ID}"
 
 	# Return 0
 	return 0
