@@ -91,7 +91,7 @@ function get_outfile {
 		# Change owner if reuqired
 		if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
 			chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}" 2>/dev/null
-			[ $? -ne 0 ] && echo "ERROR: Could not change ownership of ${JOB_OUTPUT_DIR}" && return 1
+			[ $? -ne 0 ] && echo "WARNING: Could not change ownership of ${JOB_OUTPUT_DIR}" && return 1
 		fi
 
 	fi
@@ -103,7 +103,7 @@ function get_outfile {
 	# Change owner if reuqired
 	if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
 		chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" 2>/dev/null
-		[ $? -ne 0 ] && echo "ERROR: Could not change ownership of ${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" && return 1
+		[ $? -ne 0 ] && echo "WARNING: Could not change ownership of ${JOB_OUTPUT_DIR}/${JOB_ID}.tar.gz" && return 1
 	fi
 
 	# Everything worked as expected, delete output (cleanup)
