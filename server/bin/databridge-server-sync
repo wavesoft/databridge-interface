@@ -168,26 +168,30 @@ function download_jobs {
 		JOB_ID=$(echo "$JOB" | awk -F':' '{print $1}')
 		JOB_TS=$(echo "$JOB" | awk -F':' '{print $2}')
 
-		# Check for expired
-		let DELTA=$(date +%s)-${JOB_TS}
-		if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
-			echo "WARN: Job ${JOB_ID} expired after ${DELTA} seconds"
-		else
-			# Try to get job file
-			get_outfile ${JOB_ID}
-			# If we didn't manage, re-schedule attempt later
-			if [ $? -ne 0 ]; then
-				# Process later
+		# Try to get job file
+		get_outfile ${JOB_ID}
+
+		# If we didn't manage, re-schedule attempt later
+		if [ $? -ne 0 ]; then
+
+			# Check for expired job
+			let DELTA=$(date +%s)-${JOB_TS}
+			if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+				# Warn the user, and don't touch stale counter
+				echo "WARN: Job ${JOB_ID} expired after ${DELTA} seconds"
+			else
+				# Otherwise process later
 				echo "$JOB" >> ${ROTATE_FILE}
 				# Increment stale counter
 				let STALE_COUNTER+=1
 				# Warn for stale
 				[  $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ] && echo "WARN: Too many input jobs without data. Reading staled!"
-			else
-				echo "INFO: Job ${JOB_ID} completed"
-				# Reset stale counter
-				STALE_COUNTER=0
 			fi
+
+		else
+			echo "INFO: Job ${JOB_ID} completed"
+			# Reset stale counter
+			STALE_COUNTER=0
 		fi
 
 	done < ${DATABRIDGE_JOB_LIST}
