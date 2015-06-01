@@ -21,33 +21,55 @@
 # Where the server configuration of DataBridge server-sync is located
 CONFIG_FILE="/etc/databridge/server.conf"
 
+function log {
+	local LEVEL=$1
+	local LEVEL_STR="DEBUG"
+	shift
+
+	# Translate level to string
+	if [ $LEVEL -eq 1 ]; then
+		LEVEL_STR="INFO"
+	elif [ $LEVEL -eq 2 ]; then
+		LEVEL_STR="WARN"
+	elif [ $LEVEL -eq 3 ]; then
+		LEVEL_STR="ERROR"
+	fi
+
+	# Check for log destination
+	if [ -z "${DATABRIDGE_LOG_FILE}" ]; then
+		echo "${LEVEL_STR}: $*"
+	else
+		echo "$(date -R) ${LEVEL_STR}: $*" >> ${DATABRIDGE_LOG_FILE}
+	fi
+}
+
 function put_jobfile {
 	local FILE=$1
 
 	# Validate file
-	[ ! -f ${FILE} ] && echo "ERROR: File $FILE does not exist" && return 1
+	[ ! -f ${FILE} ] && log 3 "File $FILE does not exist" && return 1
 
 	# Get file UUID
 	local JOB_ID=$(uuidgen)	
 
 	# Upload file on input queue
-	echo "INFO: Uploading job file ${FILE}"
+	log 1 "Uploading job file ${FILE}"
 	curl -f -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 	[ $? -ne 0 ] && return 1
 	
 	# Upload job ID on FIFO	
-	echo "INFO: Uploading job description"
+	log 1 "Uploading job description"
 	curl -f -X PUT -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
 	if [ $? -ne 0 ]; then
 		# Remove from queue
-		echo "ERROR: Could not upload job description, removing job file"
+		log 3 "Could not upload job description, removing job file"
 		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 		# Return error
 		return 1
 	fi
 	
 	# Successfuly placed, update state file
-	echo "INFO: Job ${JOB_ID} placed in queue"
+	log 1 "Job ${JOB_ID} placed in queue"
 	echo "$JOB_ID:$(date +%s)" >> $DATABRIDGE_JOB_LIST
 
 	# Return 0
@@ -86,29 +108,29 @@ function get_outfile {
 
 		# Create directory
 		mkdir -p "${JOB_OUTPUT_DIR}" 2>/dev/null
-		[ $? -ne 0 ] && echo "ERROR: Could not create directory ${JOB_OUTPUT_DIR}" && return 1
+		[ $? -ne 0 ] && log 3 "Could not create directory ${JOB_OUTPUT_DIR}" && return 1
 
 		# Change owner if reuqired
 		if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
 			chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}" 2>/dev/null
-			[ $? -ne 0 ] && echo "WARNING: Could not change ownership of ${JOB_OUTPUT_DIR}"
+			[ $? -ne 0 ] && log 2 "Could not change ownership of ${JOB_OUTPUT_DIR}"
 		fi
 
 	fi
 
 	# Move file to the proper location
 	mv "${F_JOB}" "${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" 2>/dev/null
-	[ $? -ne 0 ] && echo "ERROR: Could not move job file to ${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" && return 1
+	[ $? -ne 0 ] && log 3 "Could not move job file to ${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" && return 1
 
 	# Change owner if reuqired
 	if [ ! -z "${DATABRIDGE_OUTPUT_OWNER}" ]; then
 		chown ${DATABRIDGE_OUTPUT_OWNER} "${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" 2>/dev/null
-		[ $? -ne 0 ] && echo "WARNING: Could not change ownership of ${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}"
+		[ $? -ne 0 ] && log 2 "Could not change ownership of ${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}"
 	fi
 
 	# Everything worked as expected, delete output (cleanup)
 	curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-	[ $? -ne 0 ] && echo "WARNING: Unable to clean job output of job ${JOB_ID}"
+	[ $? -ne 0 ] && log 2 "Unable to clean job output of job ${JOB_ID}"
 
 	# Return 0
 	return 0
@@ -128,13 +150,13 @@ function upload_jobs {
 		if [ $? -eq 0 ]; then
 			rm $FILE
 		else
-			echo "ERROR: Could not upload file $FILE, will try later"
+			log 3 "Could not upload file $FILE, will try later"
 		fi
 
 		# Increment counter
 		let COUNTER+=1
-		if [ $COUNTER -ge ${DATABRIDGE_UPLOAD_BULK_SIZE} ]; then
-			echo "INFO: Reached limit of ${DATABRIDGE_UPLOAD_BULK_SIZE} jobs per submission"
+		if [ $COUNTER -ge ${UPLOAD_LIMIT} ]; then
+			log 1 "Reached limit of ${UPLOAD_LIMIT} jobs per submission"
 			break
 		fi
 
@@ -178,14 +200,14 @@ function download_jobs {
 			let DELTA=$(date +%s)-${JOB_TS}
 			if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
 				# Warn the user, and don't touch stale counter
-				echo "WARN: Job ${JOB_ID} expired after ${DELTA} seconds"
+				log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 			else
 				# Otherwise process later
 				echo "$JOB" >> ${ROTATE_FILE}
 				# Increment stale counter
 				let STALE_COUNTER+=1
 				# Warn for stale
-				[  $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ] && echo "WARN: Too many input jobs without data. Reading staled!"
+				[  $STALE_COUNTER -gt ${DATABRIDGE_DOWNLOAD_STALE_RATE} ] && log 2 "Too many input jobs without data. Reading staled!"
 			fi
 
 		else
@@ -206,7 +228,7 @@ function download_jobs {
 
 # Lookup for the config
 if [ ! -f ${CONFIG_FILE} ]; then
-	echo "ERROR: Could not find databridge server configuration in ${CONFIG_FILE}!"
+	log 3 "Could not find databridge server configuration in ${CONFIG_FILE}!"
 	exit 1
 fi
 
@@ -222,15 +244,15 @@ mkdir -p $(dirname ${DATABRIDGE_JOB_LIST})
 TMP_DIR=$(mktemp -d)
 
 # Start by downloading jobs
-echo "INFO: Downloading job outputs from DataBridge"
+log 1 "Downloading job outputs from DataBridge"
 download_jobs
 
 # Then upload jobs
-echo "INFO: Uploading new jobs to DataBridge"
+log 1 "Uploading new jobs to DataBridge"
 upload_jobs
 
 # Remove temporary directory
 rm -rf "${TMP_DIR}"
 
 # We are done
-echo "INFO: DataBridge synchronization completed"
+log 1 "DataBridge synchronization completed"
