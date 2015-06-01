@@ -139,6 +139,25 @@ function get_outfile {
 function upload_jobs {
 	local COUNTER=0
 	local FILE=""
+	local QUEUE_SIZE=0
+	local UPLOAD_LIMIT=${DATABRIDGE_UPLOAD_BULK_SIZE}
+
+	# Check if we should cap the UPLOAD_LIMIT
+	if [ ${DATABRIDGE_MAX_QUEUE_SIZE} -gt 0 ]; then
+
+		# Check the length of the queue
+		QUEUE_SIZE=$(cat ${DATABRIDGE_JOB_LIST})
+
+		# Check delta
+		let UPLOAD_LIMIT=${DATABRIDGE_MAX_QUEUE_SIZE}-${QUEUE_SIZE}
+
+		# If less than 0, don't bother
+		if [ ${UPLOAD_LIMIT} -le 0 ]; then
+			log 1 "Skipping because queue contains ${QUEUE_SIZE} jobs"
+			return
+		fi
+
+	fi
 
 	# Start submitting jobs
 	for FILE in ${DATABRIDGE_INPUT_DIR}/*; do
