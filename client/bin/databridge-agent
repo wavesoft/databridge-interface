@@ -97,11 +97,10 @@ while true; do
 
         # Get exit code
         EXIT_CODE=$?
-        echo "exitcode=${EXIT_CODE}" >> ${WORKDIR}/jobdata
 
         # Upload results
         echo "INFO: Uploading results"
-        upload_jobdir ${WORKDIR} ${JOB_ID} "exitcode=$EXIT_CODE"
+        upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE"
 
         # Cleanup
         echo "INFO: Cleaning-up workdir"
