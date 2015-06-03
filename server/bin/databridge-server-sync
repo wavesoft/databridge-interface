@@ -230,7 +230,7 @@ function download_jobs {
 			fi
 
 		else
-			echo "INFO: Job ${JOB_ID} completed"
+			log 1 "Job ${JOB_ID} completed"
 			# Reset stale counter
 			STALE_COUNTER=0
 		fi
