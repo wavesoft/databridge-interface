@@ -147,7 +147,7 @@ function upload_jobs {
 	if [ ${DATABRIDGE_MAX_QUEUE_SIZE} -gt 0 ]; then
 
 		# Check the length of the queue
-		QUEUE_SIZE=$(cat ${DATABRIDGE_JOB_LIST})
+		QUEUE_SIZE=$(cat ${DATABRIDGE_JOB_LIST} | wc -l)
 
 		# Check delta
 		let UPLOAD_LIMIT=${DATABRIDGE_MAX_QUEUE_SIZE}-${QUEUE_SIZE}
