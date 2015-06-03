@@ -119,7 +119,8 @@ function get_outfile {
 	fi
 
 	# Move file to the proper location
-	mv "${F_JOB}" "${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" 2>/dev/null
+	JOB_OUTFILE="${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}"
+	mv "${F_JOB}" "${JOB_OUTFILE}" 2>/dev/null
 	[ $? -ne 0 ] && log 3 "Could not move job file to ${JOB_OUTPUT_DIR}/${JOB_ID}${DATABRIDGE_OUTPUT_EXT}" && return 1
 
 	# Change owner if reuqired
@@ -188,6 +189,7 @@ function download_jobs {
 	local JOB_ID=""
 	local JOB_TS=""
 	local JOB=""
+	local ANS=0
 	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
 
 	# Prepare rotation file
@@ -230,9 +232,26 @@ function download_jobs {
 			fi
 
 		else
+
+			# Job downloaded
 			log 1 "Job ${JOB_ID} completed"
+
+			# Fire appropriate callback
+			if [ ! -z "${DATABRIDGE_CB_COMPLETED}" ]; then
+				# Fire callback
+				${DATABRIDGE_CB_COMPLETED} "${JOB_OUTFILE}" "${JOB_ID}"
+				ANS=$?
+				# Check result
+				if [ $? -ne 0 ]; then
+					log 2 "Completed callback failed (exit code $ANS)"
+				else
+					log 1 "Completed callback executed successfully"
+				fi
+			fi
+
 			# Reset stale counter
 			STALE_COUNTER=0
+
 		fi
 
 	done < ${DATABRIDGE_JOB_LIST}
