@@ -20,27 +20,30 @@
 
 # Base directory for the DataBridge
 DB_URL="https://t4t-data-bridge.cern.ch"
+
+# We will need the BOINC UserID and BOINC Authenticator as the first two parameters
+AUTH_USER="$1"
+AUTH_PASSWORD="$2"
+[ -z "$AUTH_USER" ] && echo "ERROR: Please specify the authentication username!" && exit 2
+[ -z "$AUTH_PASSWORD" ] && echo "ERROR: Please specify the authentication password!" && exit 2
+[ ! -z "$3" ] && DB_URL="$3"
+
+# Define URLs using base URL as reference
 DB_QUEUE_URL="${DB_URL}/boinc-client/get-job.cgi"
 DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
 DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
-
-# We will need the BOINC UserID and BOINC Authenticator as the first two parameters
-BOINC_USER="$1"
-BOINC_AUTHENTICATOR="$2"
-[ -z "$BOINC_USER" ] && echo "ERROR: Please specify the BOINC ID of the user!" && exit 2
-[ -z "$BOINC_AUTHENTICATOR" ] && echo "ERROR: Please specify the BOINC Authenticator of the user!" && exit 2
 
 function get_jobfile {
         local JOBDIR=$1
 
         # Get a job ID from the queue
-        local JOB_ID=$(curl -u "${BOINC_USER}:${BOINC_AUTHENTICATOR}" --header "userID: ${BOINC_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
+        local JOB_ID=$(curl -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
         # If queue is not empty, return
         [ -z "$JOB_ID" ] && return 1
 
         # Download job file
         local JOB_FILE="${JOBDIR}/job.sh"
-        curl -o ${JOB_FILE} -u "${BOINC_USER}:${BOINC_AUTHENTICATOR}" -k -L -s "${DB_INPUT_URL}/${JOB_ID}" 2>/dev/null
+        curl -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${JOB_ID}" 2>/dev/null
         [ $? -ne 0 ] && return 1
 
         # Got file
@@ -58,7 +61,7 @@ function upload_jobdir {
         ( cd ${JOBDIR}; tar -zcf ${ARCHIVE_FILE} ./* )
 
         # Upload archive directory
-        curl -X PUT --upload "${ARCHIVE_FILE}" -u "${BOINC_USER}:${BOINC_AUTHENTICATOR}" -k -L -s "${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}" 2>/dev/null
+        curl -X PUT --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}" 2>/dev/null
 
         # Remove archive file
         rm "${ARCHIVE_FILE}"
@@ -100,7 +103,7 @@ while true; do
 
         # Upload results
         echo "INFO: Uploading results"
-        upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE"
+        upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
 
         # Cleanup
         echo "INFO: Cleaning-up workdir"
