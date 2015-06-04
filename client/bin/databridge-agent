@@ -34,44 +34,56 @@ DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
 DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
 
 function get_jobfile {
-        local JOBDIR=$1
+    local JOBDIR=$1
 
-        # Get a job ID from the queue
-        local JOB_ID=$(curl -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
-        # If queue is not empty, return
-        [ -z "$JOB_ID" ] && return 1
+    # Get a job ID from the queue
+    local NEXT_JOB_ID=$(curl -f -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
 
-        # Download job file
-        local JOB_FILE="${JOBDIR}/job.sh"
-        curl -f -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${JOB_ID}" 2>/dev/null
-        [ $? -ne 0 ] && return 1
+    # If we got an error, return
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Could not fetch next job ID from queue"
+        return 1
+    fi
 
-        # Got file
-        echo $JOB_ID
-        return 0
+    # If queue is empty, return
+    [ -z "$NEXT_JOB_ID" ] && return 1
+
+    # Download job file
+    local JOB_FILE="${JOBDIR}/job.sh"
+    curl -f -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${NEXT_JOB_ID}" 2>/dev/null
+
+    # If we got an error, return
+    if [ $? -ne 0 ]; then
+        echo "ERROR: Could not download job contents from server"
+        return 1
+    fi
+
+    # Got file
+    JOB_ID="$NEXT_JOB_ID"
+    return 0
 }
 
 function upload_jobdir {
-        local JOBDIR=$1
-        local JOB_ID=$2
-        local USER_DATA=$3
+    local JOBDIR=$1
+    local JOB_ID=$2
+    local USER_DATA=$3
 
-        # Archive job directory
-        local ARCHIVE_FILE="$(mktemp -u).tgz"
-        ( cd ${JOBDIR}; tar -zcf ${ARCHIVE_FILE} ./* )
+    # Archive job directory
+    local ARCHIVE_FILE="$(mktemp -u).tgz"
+    ( cd ${JOBDIR}; tar -zcf ${ARCHIVE_FILE} ./* )
 
-        # Upload archive directory
-        curl -X PUT --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}" 2>/dev/null
+    # Upload archive directory
+    curl -X PUT --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}" 2>/dev/null
 
-        # Remove archive file
-        rm "${ARCHIVE_FILE}"
+    # Remove archive file
+    rm "${ARCHIVE_FILE}"
 }
 
 function cleanup {
-        # Remove directory
-        [ -d ${WORKDIR} -a ${#WORKDIR} -gt 1 ] && rm -rf ${WORKDIR}
-        # Exit
-        exit 0
+    # Remove directory
+    [ -d ${WORKDIR} -a ${#WORKDIR} -gt 1 ] && rm -rf ${WORKDIR}
+    # Exit
+    exit 0
 }
 
 # Trap cleanup
@@ -80,36 +92,38 @@ trap cleanup SIGINT
 # Main program loop
 while true; do
 
-        # Create a temporary directory for the project
-        WORKDIR=$(mktemp -d)
+    # Create a temporary directory for the project
+    WORKDIR=$(mktemp -d)
 
-        # Download job file
-        JOB_ID=""
-        echo "INFO: Fetching next job in queue"
-        while [ -z "$JOB_ID" ]; do
-                JOB_ID=$(get_jobfile "${WORKDIR}")
-                if [ -z "$JOB_ID" ]; then
-                        echo "INFO: Queue is empty. Waiting 1 min before checking again"
-                        sleep 60
-                fi
-        done
+    # Download job file
+    JOB_ID=""
+    echo "INFO: Fetching next job in queue"
+    while [ -z "$JOB_ID" ]; do
 
-        # Run job
-        echo "INFO: Starting job ${JOB_ID}"
-        ( cd "${WORKDIR}"; chmod +x job.sh; exec ./job.sh ) >${WORKDIR}/job.stdout 2>${WORKDIR}/job.stderr
+        # Get next job file (updates JOB_ID)
+        get_jobfile
 
-        # Get exit code
-        EXIT_CODE=$?
+        # Sleep on errors
+        [ $? -ne 0 ] && sleep 60
 
-        # Upload results
-        echo "INFO: Uploading results"
-        upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
+    done
 
-        # Cleanup
-        echo "INFO: Cleaning-up workdir"
-        rm -rf "${WORKDIR}"
+    # Run job
+    echo "INFO: Starting job ${JOB_ID}"
+    ( cd "${WORKDIR}"; chmod +x job.sh; exec ./job.sh ) >${WORKDIR}/job.stdout 2>${WORKDIR}/job.stderr
 
-        # Sleep a bit
-        sleep 10
+    # Get exit code
+    EXIT_CODE=$?
+
+    # Upload results
+    echo "INFO: Uploading results"
+    upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
+
+    # Cleanup
+    echo "INFO: Cleaning-up workdir"
+    rm -rf "${WORKDIR}"
+
+    # Sleep a bit
+    sleep 10
 
 done
