@@ -97,14 +97,19 @@ while true; do
 
     # Download job file
     JOB_ID=""
-    echo "INFO: Fetching next job in queue"
     while [ -z "$JOB_ID" ]; do
 
+        # Log attempts
+        echo "INFO: Fetching next job in queue"
+
         # Get next job file (updates JOB_ID)
-        get_jobfile
+        get_jobfile "${WORKDIR}"
 
         # Sleep on errors
-        [ $? -ne 0 ] && sleep 60
+        if [ $? -ne 0 ]; then
+            echo "INFO: Sleeping for 1 minute"
+            sleep 60
+        fi
 
     done
 
