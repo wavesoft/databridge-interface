@@ -43,7 +43,7 @@ function get_jobfile {
 
         # Download job file
         local JOB_FILE="${JOBDIR}/job.sh"
-        curl -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${JOB_ID}" 2>/dev/null
+        curl -s -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${JOB_ID}" 2>/dev/null
         [ $? -ne 0 ] && return 1
 
         # Got file
