@@ -184,6 +184,7 @@ while true; do
     fi
 
     # Sleep a bit
+    echo "INFO: Sleeping for ${BHP_TIMER} seconds"
     sleep ${BHP_TIMER}
 
 done
