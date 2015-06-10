@@ -35,13 +35,14 @@ DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
 
 # Black Hole Protection: Minimum time required by a job (5 min)
 BHP_MIN_JOB_TIME=300
-
 # Black Hole Protection: Upper limit to reach when delaying next job
 # request before declaring the job unprocessable.
 BHP_MAX_DELAY=3600
-
 # Black Hole Protection: The initial delay between consecutive job requests
 BHP_INITIAL_DELAY=5
+
+# DumbQ Metrics binary
+DUMBQ_METRICS_BIN=$(which dumbq-metrics)
 
 function get_jobfile {
     local JOBDIR=$1
@@ -136,6 +137,7 @@ while true; do
 
     # Get the timestamp when the job has finished
     TS_FINISHED=$(date +%s)
+    let TS_DELTA=${TS_FINISHED}-${TS_STARTED}
 
     # Upload results
     echo "INFO: Uploading results"
@@ -145,8 +147,22 @@ while true; do
     echo "INFO: Cleaning-up workdir"
     rm -rf "${WORKDIR}"
 
+    # Update DumbQ Metrics if existing
+    if [ ! -z "$DUMBQ_METRICS_BIN" ]; then
+
+        # Increment job metrics
+        ${DUMBQ_METRICS_BIN} --add jobs=1 --avg jobtime=${TS_DELTA}
+
+        # Update job status metrics
+        if [ $EXIT_CODE -eq 0 ]; then
+            ${DUMBQ_METRICS_BIN} --add completed=1
+        else
+            ${DUMBQ_METRICS_BIN} --add failed=1
+        fi
+
+    fi
+
     # Apply blackhole protection
-    let TS_DELTA=${TS_FINISHED}-${TS_STARTED}
     if [ $TS_DELTA -gt ${BHP_MIN_JOB_TIME} ]; then
         # The job is quitting faster than expected
         echo "WARN: Job exited after ${TS_DELTA} seconds (> ${BHP_MIN_JOB_TIME})"
