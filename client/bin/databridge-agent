@@ -39,7 +39,7 @@ BHP_MIN_JOB_TIME=300
 # request before declaring the job unprocessable.
 BHP_MAX_DELAY=3600
 # Black Hole Protection: The initial delay between consecutive job requests
-BHP_INITIAL_DELAY=5
+BHP_INITIAL_DELAY=10
 
 # DumbQ Metrics binary
 DUMBQ_METRICS_BIN=$(which dumbq-metrics)
@@ -169,14 +169,14 @@ while true; do
     # Apply blackhole protection
     if [ $TS_DELTA -lt ${BHP_MIN_JOB_TIME} ]; then
         # The job is quitting faster than expected
-        echo "WARN: Job exited after ${TS_DELTA} seconds (> ${BHP_MIN_JOB_TIME})"
+        echo "WARN: Black hole detected. Job exited after ${TS_DELTA} seconds (<${BHP_MIN_JOB_TIME})"
         # Scale-up the blackhole timer delay
         let BHP_TIMER*=2
         # If we have exceeded BHP_MAX_DELAY, abort!
         if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
             echo "ERROR: Exceeded BHP max timer will reboot!"
             reboot
-            exit
+            exit 1
         fi
     else
         # Otherwise the job works fine, keep initial delay
