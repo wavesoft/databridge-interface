@@ -167,7 +167,7 @@ while true; do
     fi
 
     # Apply blackhole protection
-    if [ $TS_DELTA -gt ${BHP_MIN_JOB_TIME} ]; then
+    if [ $TS_DELTA -lt ${BHP_MIN_JOB_TIME} ]; then
         # The job is quitting faster than expected
         echo "WARN: Job exited after ${TS_DELTA} seconds (> ${BHP_MIN_JOB_TIME})"
         # Scale-up the blackhole timer delay
