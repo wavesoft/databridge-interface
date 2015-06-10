@@ -157,7 +157,7 @@ while true; do
     # Update DumbQ Metrics if existing
     if [ ! -z "$DUMBQ_METRICS_BIN" ]; then
         # Increment job metrics
-        ${DUMBQ_METRICS_BIN} --add jobs=1 --avg jobtime=${TS_DELTA} --set status=completed --set exitcode=${EXIT_CODE}
+        ${DUMBQ_METRICS_BIN} --add jobs=1 --add jobtime=${TS_DELTA} --avg jobaverage=${TS_DELTA} --set status=completed --set exitcode=${EXIT_CODE}
         # Update job status metrics
         if [ $EXIT_CODE -eq 0 ]; then
             ${DUMBQ_METRICS_BIN} --add completed=1
