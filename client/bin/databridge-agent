@@ -33,6 +33,16 @@ DB_QUEUE_URL="${DB_URL}/boinc-client/get-job.cgi"
 DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
 DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
 
+# Black Hole Protection: Minimum time required by a job (5 min)
+BHP_MIN_JOB_TIME=300
+
+# Black Hole Protection: Upper limit to reach when delaying next job
+# request before declaring the job unprocessable.
+BHP_MAX_DELAY=3600
+
+# Black Hole Protection: The initial delay between consecutive job requests
+BHP_INITIAL_DELAY=5
+
 function get_jobfile {
     local JOBDIR=$1
 
@@ -90,6 +100,7 @@ function cleanup {
 trap cleanup SIGINT
 
 # Main program loop
+BHP_TIMER=${BHP_INITIAL_DELAY}
 while true; do
 
     # Create a temporary directory for the project
@@ -113,12 +124,18 @@ while true; do
 
     done
 
+    # Get the timestamp when the job has started
+    TS_STARTED=$(date +%s)
+
     # Run job
     echo "INFO: Starting job ${JOB_ID}"
     ( cd "${WORKDIR}"; chmod +x job.sh; exec ./job.sh ) >${WORKDIR}/job.stdout 2>${WORKDIR}/job.stderr
 
     # Get exit code
     EXIT_CODE=$?
+
+    # Get the timestamp when the job has finished
+    TS_FINISHED=$(date +%s)
 
     # Upload results
     echo "INFO: Uploading results"
@@ -128,7 +145,25 @@ while true; do
     echo "INFO: Cleaning-up workdir"
     rm -rf "${WORKDIR}"
 
+    # Apply blackhole protection
+    let TS_DELTA=${TS_FINISHED}-${TS_STARTED}
+    if [ $TS_DELTA -gt ${BHP_MIN_JOB_TIME} ]; then
+        # The job is quitting faster than expected
+        echo "WARN: Job exited after ${TS_DELTA} seconds (> ${BHP_MIN_JOB_TIME})"
+        # Scale-up the blackhole timer delay
+        let BHP_TIMER*=2
+        # If we have exceeded BHP_MAX_DELAY, abort!
+        if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
+            echo "ERROR: Exceeded BHP max timer will reboot!"
+            reboot
+            exit
+        fi
+    else
+        # Otherwise the job works fine, keep initial delay
+        BHP_TIMER=${BHP_INITIAL_DELAY}
+    fi
+
     # Sleep a bit
-    sleep 10
+    sleep ${BHP_TIMER}
 
 done
