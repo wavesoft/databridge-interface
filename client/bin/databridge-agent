@@ -107,6 +107,9 @@ while true; do
     # Create a temporary directory for the project
     WORKDIR=$(mktemp -d)
 
+    # Update DumbQ metrics
+    [ ! -z "$DUMBQ_METRICS_BIN" ] && ${DUMBQ_METRICS_BIN} --set status=waiting
+
     # Download job file
     JOB_ID=""
     while [ -z "$JOB_ID" ]; do
@@ -125,8 +128,12 @@ while true; do
 
     done
 
+
     # Get the timestamp when the job has started
     TS_STARTED=$(date +%s)
+
+    # Update DumbQ metrics
+    [ ! -z "$DUMBQ_METRICS_BIN" ] && ${DUMBQ_METRICS_BIN} --set status=running
 
     # Run job
     echo "INFO: Starting job ${JOB_ID}"
@@ -149,17 +156,14 @@ while true; do
 
     # Update DumbQ Metrics if existing
     if [ ! -z "$DUMBQ_METRICS_BIN" ]; then
-
         # Increment job metrics
-        ${DUMBQ_METRICS_BIN} --add jobs=1 --avg jobtime=${TS_DELTA}
-
+        ${DUMBQ_METRICS_BIN} --add jobs=1 --avg jobtime=${TS_DELTA} --set status=completed --set exitcode=${EXIT_CODE}
         # Update job status metrics
         if [ $EXIT_CODE -eq 0 ]; then
             ${DUMBQ_METRICS_BIN} --add completed=1
         else
             ${DUMBQ_METRICS_BIN} --add failed=1
         fi
-
     fi
 
     # Apply blackhole protection
