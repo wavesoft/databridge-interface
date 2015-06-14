@@ -174,7 +174,7 @@ while true; do
         let BHP_TIMER*=2
         # If we have exceeded BHP_MAX_DELAY, abort!
         if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
-            echo "ERROR: Exceeded BHP max timer will reboot!"
+            echo "ERROR: Exceeded BHP max timer, will reboot!"
             reboot
             exit 1
         fi
