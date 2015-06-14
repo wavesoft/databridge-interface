@@ -50,7 +50,7 @@ function put_jobfile {
 	[ ! -f ${FILE} ] && log 3 "File $FILE does not exist" && return 1
 
 	# Get file UUID
-	local JOB_ID=$(uuidgen)	
+	JOB_ID=$(uuidgen)	
 
 	# Upload file on input queue
 	log 1 "Uploading job file ${FILE}"
@@ -168,7 +168,23 @@ function upload_jobs {
 
 		# Upon successful placement, remove
 		if [ $? -eq 0 ]; then
+
+			# Fire appropriate callback
+			if [ ! -z "${DATABRIDGE_CB_SCHEDULED}" ]; then
+				# Fire callback
+				${DATABRIDGE_CB_SCHEDULED} "${FILE}" "${JOB_ID}"
+				ANS=$?
+				# Check result
+				if [ $? -ne 0 ]; then
+					log 2 "SCHEDULED callback failed (exit code $ANS)"
+				else
+					log 1 "SCHEDULED callback executed successfully"
+				fi
+			fi
+
+			# Delete file
 			rm $FILE
+
 		else
 			log 3 "Could not upload file $FILE, will try later"
 		fi
@@ -243,9 +259,9 @@ function download_jobs {
 				ANS=$?
 				# Check result
 				if [ $? -ne 0 ]; then
-					log 2 "Completed callback failed (exit code $ANS)"
+					log 2 "COMPLETED callback failed (exit code $ANS)"
 				else
-					log 1 "Completed callback executed successfully"
+					log 1 "COMPLETED callback executed successfully"
 				fi
 			fi
 
