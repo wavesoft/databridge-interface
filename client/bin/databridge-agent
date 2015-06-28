@@ -44,6 +44,12 @@ BHP_INITIAL_DELAY=10
 # DumbQ Metrics binary
 DUMBQ_METRICS_BIN=$(which dumbq-metrics)
 
+# Log helper
+function log {
+    # Echo log line with date
+    echo "[$(date '+%d/%m/%Y %H:%M:%S')] $1: $*"
+}
+
 function get_jobfile {
     local JOBDIR=$1
 
@@ -52,7 +58,7 @@ function get_jobfile {
 
     # If we got an error, return
     if [ $? -ne 0 ]; then
-        echo "ERROR: Could not fetch next job ID from queue"
+        log "ERROR" "Could not fetch next job ID from queue"
         return 1
     fi
 
@@ -65,7 +71,7 @@ function get_jobfile {
 
     # If we got an error, return
     if [ $? -ne 0 ]; then
-        echo "ERROR: Could not download job contents from server"
+        log "ERROR" "Could not download job contents from server"
         return 1
     fi
 
@@ -115,14 +121,14 @@ while true; do
     while [ -z "$JOB_ID" ]; do
 
         # Log attempts
-        echo "INFO: Fetching next job in queue"
+        log "INFO" "Fetching next job in queue"
 
         # Get next job file (updates JOB_ID)
         get_jobfile "${WORKDIR}"
 
         # Sleep on errors
         if [ $? -ne 0 ]; then
-            echo "INFO: Sleeping for 1 minute"
+            log "INFO" "Sleeping for 1 minute"
             sleep 60
         fi
 
@@ -136,7 +142,7 @@ while true; do
     [ ! -z "$DUMBQ_METRICS_BIN" ] && ${DUMBQ_METRICS_BIN} --set status=running
 
     # Run job
-    echo "INFO: Starting job ${JOB_ID}"
+    log "INFO" "Starting job ${JOB_ID}"
     ( cd "${WORKDIR}"; chmod +x job.sh; exec ./job.sh ) >${WORKDIR}/job.stdout 2>${WORKDIR}/job.stderr
 
     # Get exit code
@@ -147,11 +153,11 @@ while true; do
     let TS_DELTA=${TS_FINISHED}-${TS_STARTED}
 
     # Upload results
-    echo "INFO: Uploading results"
+    log "INFO" "Uploading results"
     upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
 
     # Cleanup
-    echo "INFO: Cleaning-up workdir"
+    log "INFO" "Cleaning-up workdir"
     rm -rf "${WORKDIR}"
 
     # Update DumbQ Metrics if existing
@@ -169,12 +175,12 @@ while true; do
     # Apply blackhole protection
     if [ $TS_DELTA -lt ${BHP_MIN_JOB_TIME} ]; then
         # The job is quitting faster than expected
-        echo "WARN: Black hole detected. Job exited after ${TS_DELTA} seconds (<${BHP_MIN_JOB_TIME})"
+        log "WARN" "Black hole detected. Job exited after ${TS_DELTA} seconds (<${BHP_MIN_JOB_TIME})"
         # Scale-up the blackhole timer delay
         let BHP_TIMER*=2
         # If we have exceeded BHP_MAX_DELAY, abort!
         if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
-            echo "ERROR: Exceeded BHP max timer, will reboot!"
+            log "ERROR" "Exceeded BHP max timer, will reboot!"
             reboot
             exit 1
         fi
@@ -184,7 +190,7 @@ while true; do
     fi
 
     # Sleep a bit
-    echo "INFO: Sleeping for ${BHP_TIMER} seconds"
+    log "INFO" "Sleeping for ${BHP_TIMER} seconds"
     sleep ${BHP_TIMER}
 
 done
