@@ -200,7 +200,105 @@ function upload_jobs {
 
 }
 
-function download_jobs {
+function download_jobs_list {
+	local DELTA=0
+	local JOB=""
+	local JOB_ID=""
+	local JOB_TS=""
+	local CHECK_ID=""
+	local LIST_SERVER="${TMP_DIR}/incoming.list"
+	local LIST_SERVERIDS="${TMP_DIR}/ids.server"
+	local LIST_LOCALIDS="${TMP_DIR}/ids.local"
+	local ROTATE_TMP="${TMP_DIR}/joblist.tmp"
+	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
+
+	# Download the list of jobs in the queue
+	log 1 "Enumerating files in the server output directory"
+	curl -f -X GET --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}" | \
+		grep 'metalink"><a href="' | \
+		sed -r 's/.*metalink"><a href="([^"?]+).*/\1/' > ${LIST_SERVER}
+
+	# Check if list is empty
+	if [ ! -s "${LIST_SERVER}" ]; then
+		log 2 "Server output directory is empty. Suspicious..."
+		return
+	fi
+
+	# Get a sorted list of two IDs
+	cat "${LIST_SERVER}" | grep .tgz | sed 's/.tgz//' | sort > ${LIST_SERVERIDS}
+	cat "${DATABRIDGE_JOB_LIST}" | awk -F':' '{print $1}' | sort > ${LIST_LOCALIDS}
+
+	# Find IDs present in both our local and remote lists 
+	# which effectively menans that a job we are monitoring has
+	# placed it's output on the server.
+	while read JOB_ID; do
+
+		# Try to get job file
+		get_outfile ${JOB_ID}
+
+	done < <(comm -12 ${LIST_SERVERIDS} ${LIST_LOCALIDS})
+
+	# Process all jobs in server that are not in our local list,
+	# which effectively means jobs that are not trackable any longer
+	# and should be safely disposed.
+	while read JOB_ID; do
+
+		# Delete job
+		log 1 "Deleting garbage data of job ${JOB_ID}"
+		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+		if [ $? -ne 0 ]; then
+			log 2 "Could not delete garbage of job ${JOB_ID}"
+		fi
+
+	done < <(comm -23 ${LIST_SERVERIDS} ${LIST_LOCALIDS})
+
+	# Find all the IDs of pending jobs in the queue.
+	# Include in the same file the job database in order to 
+	# easily identify which entries are present (after sorting).
+	cp -f ${DATABRIDGE_JOB_LIST} ${ROTATE_TMP}
+	comm -13 ${LIST_SERVERIDS} ${LIST_LOCALIDS} >> ${ROTATE_TMP}
+
+	# Reset rotate file
+	touch ${ROTATE_FILE}
+
+	# Process all jobs in local queue that are not present in the server,
+	# which effectively means jobs that we are waiting for their completion.
+	while read JOB; do
+
+		# The entry without ':' comes first. If found and the next entry has the same ID
+		# it means that this ID is pending completion
+		if [[ $JOB != *":"* ]]; then 
+			# Keep the job ID
+			CHECK_ID="$JOB_ID"
+		else
+			# Get job details
+			JOB_ID=$(echo "$JOB" | awk -F':' '{print $1}')
+			JOB_TS=$(echo "$JOB" | awk -F':' '{print $2}')
+
+			# Check if we should keep this for further processing
+			if [ "$JOB_ID" == "$CHECK_ID" ]; then
+
+				# Check for expired job
+				let DELTA=$(date +%s)-${JOB_TS}
+				if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+					# Warn the user, and don't touch stale counter
+					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
+				else
+					# Otherwise process later
+					echo "$JOB" >> ${ROTATE_FILE}
+				fi
+			fi
+
+		fi
+		
+	done < <(sort ${ROTATE_TMP})
+
+	# Rotate state file
+	cp -f --no-preserve=mode,ownership ${ROTATE_FILE} ${DATABRIDGE_JOB_LIST}
+
+}
+
+function download_jobs_sequential {
 	local STALE_COUNTER=0
 	local JOB_ID=""
 	local JOB_TS=""
@@ -298,8 +396,15 @@ mkdir -p $(dirname ${DATABRIDGE_JOB_LIST})
 TMP_DIR=$(mktemp -d)
 
 # Start by downloading jobs
-log 1 "Downloading job outputs from DataBridge"
-download_jobs
+if [ "${DATABRIDGE_PROBE_TYPE}" == "1" ]; then
+	# Use the list algorithm
+	log 1 "Downloading job outputs from DataBridge using job listing"
+	download_jobs_list
+else
+	# Use sequential probing algorithm
+	log 1 "Downloading job outputs from DataBridge using sequential probing"
+	download_jobs_sequential
+fi
 
 # Then upload jobs
 log 1 "Uploading new jobs to DataBridge"
