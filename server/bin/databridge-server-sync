@@ -296,6 +296,20 @@ function download_jobs_list {
 				if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
 					# Warn the user, and don't touch stale counter
 					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
+
+					# Fire appropriate callback
+					if [ ! -z "${DATABRIDGE_CB_EXPIRED}" ]; then
+						# Fire callback
+						${DATABRIDGE_CB_EXPIRED} "${JOB_ID}"
+						ANS=$?
+						# Check result
+						if [ $? -ne 0 ]; then
+							log 2 "EXPIRED callback failed (exit code $ANS)"
+						else
+							log 1 "EXPIRED callback executed successfully"
+						fi
+					fi
+
 				else
 					# Otherwise process later
 					echo "$JOB" >> ${ROTATE_FILE}
@@ -349,6 +363,20 @@ function download_jobs_sequential {
 			if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
 				# Warn the user, and don't touch stale counter
 				log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
+
+				# Fire appropriate callback
+				if [ ! -z "${DATABRIDGE_CB_EXPIRED}" ]; then
+					# Fire callback
+					${DATABRIDGE_CB_EXPIRED} "${JOB_ID}"
+					ANS=$?
+					# Check result
+					if [ $? -ne 0 ]; then
+						log 2 "EXPIRED callback failed (exit code $ANS)"
+					else
+						log 1 "EXPIRED callback executed successfully"
+					fi
+				fi
+
 			else
 				# Otherwise process later
 				echo "$JOB" >> ${ROTATE_FILE}
