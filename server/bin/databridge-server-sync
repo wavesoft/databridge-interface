@@ -278,11 +278,14 @@ function download_jobs_list {
 	# which effectively means jobs that we are waiting for their completion.
 	while read JOB; do
 
+		# Skip empty lines
+		[[ -z "$JOB" ]] && continue
+
 		# The entry without ':' comes first. If found and the next entry has the same ID
 		# it means that this ID is pending completion
 		if [[ $JOB != *":"* ]]; then 
 			# Keep the job ID
-			CHECK_ID="$JOB_ID"
+			CHECK_ID="$JOB"
 		else
 			# Get job details
 			JOB_ID=$(echo "$JOB" | awk -F':' '{print $1}')
