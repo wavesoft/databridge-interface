@@ -232,7 +232,7 @@ function download_jobs_fifo {
 	while true; do
 
 		# Get next job from the output fifo
-		JOB_ID=$(curl -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_OUTQUEUE_URL}" 2>/dev/null)
+		JOB_ID=$(curl -L -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_OUTQUEUE_URL}" 2>/dev/null)
 		if [ -z "$JOB_ID" ]; then
 			log 1 "No more jobs in the output queue"
 			break
