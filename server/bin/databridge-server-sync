@@ -167,7 +167,7 @@ function upload_jobs {
 	local COUNTER=0
 	local FILE=""
 	local QUEUE_SIZE=0
-	local UPLOAD_LIMIT=${DATABRIDGE_UPLOAD_BULK_SIZE}
+	local UPLOAD_LIMIT=${DATABRIDGE_BULK_SIZE}
 
 	# Check if we should cap the UPLOAD_LIMIT
 	if [ ${DATABRIDGE_MAX_QUEUE_SIZE} -gt 0 ]; then
@@ -210,6 +210,99 @@ function upload_jobs {
 		fi
 
 	done
+
+}
+
+function download_jobs_fifo {
+	local DELTA=0
+	local COUNTER=0
+	local JOB=""
+	local JOB_ID=""
+	local JOB_TS=""
+	local CHECK_ID=""
+	local ROTATE_TMP="${TMP_DIR}/joblist.tmp"
+	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
+
+	# Copy the IDs of the jobs pending in the queue.
+	# This will help us at a later time to track changes.
+	cp -f ${DATABRIDGE_JOB_LIST} ${ROTATE_TMP}
+
+	# Repeat for a while
+	while true; then
+
+		# Get next job from the output fifo
+		JOB_ID=$(curl -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_OUTQUEUE_URL}" 2>/dev/null)
+		if [ -z "$JOB_ID" ]; then
+			log 1 "No more jobs in the output queue"
+			break
+		fi
+
+		# Try to get job file
+		get_outfile ${JOB_ID}
+
+		# Keep the ID of the processed job
+		echo "${JOB_ID}" >> ${ROTATE_TMP}
+
+		# Increment counter
+		let COUNTER++
+		if [ ${COUNTER} -lt ${DATABRIDGE_BULK_SIZE} ]; then
+			log 1 "Reached bulk limit of ${DATABRIDGE_BULK_SIZE} in download"
+			break
+		fi
+
+	fi
+
+	# Expire and process rotation file
+	while read JOB; do
+
+		# Skip empty lines
+		[ -z "$JOB" ] && continue
+
+		# The entry without ':' comes first. If found and the next entry has the same ID
+		# it means that this ID is processed and should not be accounted in the rotated file
+		if [[ $JOB != *":"* ]]; then 
+			CHECK_ID="$JOB"
+		else
+
+			# Get job details
+			JOB_ID=$(echo "$JOB" | awk -F':' '{print $1}')
+			JOB_TS=$(echo "$JOB" | awk -F':' '{print $2}')
+
+			# Matching JOB_ID <-> CHECK_ID means that the job is processed,
+			# so just ignore such jobs
+			if [ "$JOB_ID" != "$CHECK_ID" ]; then
+
+				# Check if the job is expired expired job
+				let DELTA=$(date +%s)-${JOB_TS}
+				if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+					# Warn the user, and don't touch stale counter
+					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
+
+					# Fire appropriate callback
+					if [ ! -z "${DATABRIDGE_CB_EXPIRED}" ]; then
+						# Fire callback
+						${DATABRIDGE_CB_EXPIRED} "${JOB_ID}"
+						ANS=$?
+						# Check result
+						if [ $? -ne 0 ]; then
+							log 2 "EXPIRED callback failed (exit code $ANS)"
+						else
+							log 1 "EXPIRED callback executed successfully"
+						fi
+					fi
+
+				else
+					# Otherwise process later
+					echo "$JOB" >> ${ROTATE_FILE}
+				fi
+			fi
+
+		fi
+		
+	done < <(sort ${ROTATE_TMP})
+
+	# Rotate state file
+	cp -f --no-preserve=mode,ownership ${ROTATE_FILE} ${DATABRIDGE_JOB_LIST}
 
 }
 
@@ -279,7 +372,7 @@ function download_jobs_list {
 	while read JOB; do
 
 		# Skip empty lines
-		[[ -z "$JOB" ]] && continue
+		[ -z "$JOB" ] && continue
 
 		# The entry without ':' comes first. If found and the next entry has the same ID
 		# it means that this ID is pending completion
@@ -421,8 +514,8 @@ fi
 # Multiple instances trap
 PIDFILE=/var/run/databridge-server-sync.pid
 if [ -f "$PIDFILE" ] && kill -0 `cat $PIDFILE` 2>/dev/null; then
-    log 3 "Another instance is already running"
-    exit 1
+	log 3 "Another instance is already running"
+	exit 1
 fi  
 echo $$ > $PIDFILE
 
@@ -439,6 +532,10 @@ if [ "${DATABRIDGE_PROBE_TYPE}" == "1" ]; then
 	# Use the list algorithm
 	log 1 "Downloading job outputs from DataBridge using job listing"
 	download_jobs_list
+elif [ "${DATABRIDGE_PROBE_TYPE}" == "2" ]; then
+	# Use the fifo algorithm
+	log 1 "Downloading job outputs from DataBridge using output queue"
+	download_jobs_fifo
 else
 	# Use sequential probing algorithm
 	log 1 "Downloading job outputs from DataBridge using sequential probing"

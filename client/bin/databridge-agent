@@ -29,7 +29,8 @@ AUTH_PASSWORD="$2"
 [ ! -z "$3" ] && DB_URL="$3"
 
 # Define URLs using base URL as reference
-DB_QUEUE_URL="${DB_URL}/boinc-client/get-job.cgi"
+DB_INPUT_QUEUE="${DB_URL}/boinc-client/get-job.cgi"
+DB_OUTPUT_QUEUE="${DB_URL}/boinc-client/put-jobout.cgi"
 DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
 DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
 
@@ -54,7 +55,7 @@ function get_jobfile {
     local JOBDIR=$1
 
     # Get a job ID from the queue
-    local NEXT_JOB_ID=$(curl -f -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_QUEUE_URL}" 2>/dev/null)
+    local NEXT_JOB_ID=$(curl -f -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_INPUT_QUEUE}" 2>/dev/null)
 
     # If we got an error, return
     if [ $? -ne 0 ]; then
@@ -91,6 +92,9 @@ function upload_jobdir {
 
     # Upload archive directory
     curl -X PUT --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}" 2>/dev/null
+
+    # Schedule the job to be picked-up by the output queue
+    curl -f -X PUT -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -s "${DB_OUTPUT_QUEUE}"
 
     # Remove archive file
     rm "${ARCHIVE_FILE}"
