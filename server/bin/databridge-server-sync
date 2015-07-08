@@ -254,16 +254,16 @@ function download_jobs_list {
 	# Process all jobs in server that are not in our local list,
 	# which effectively means jobs that are not trackable any longer
 	# and should be safely disposed.
-	while read JOB_ID; do
+	# while read JOB_ID; do
 
-		# Delete job
-		log 1 "Deleting garbage data of job ${JOB_ID}"
-		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-		if [ $? -ne 0 ]; then
-			log 2 "Could not delete garbage of job ${JOB_ID}"
-		fi
+	# 	# Delete job
+	# 	log 1 "Deleting garbage data of job ${JOB_ID}"
+	# 	curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	# 	if [ $? -ne 0 ]; then
+	# 		log 2 "Could not delete garbage of job ${JOB_ID}"
+	# 	fi
 
-	done < <(comm -23 ${LIST_SERVERIDS} ${LIST_LOCALIDS})
+	# done < <(comm -23 ${LIST_SERVERIDS} ${LIST_LOCALIDS})
 
 	# Find all the IDs of pending jobs in the queue.
 	# Include in the same file the job database in order to 
