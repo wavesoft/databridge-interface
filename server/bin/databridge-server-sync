@@ -102,6 +102,7 @@ function get_outfile {
 	F_HEADERS="${TMP_DIR}/headers.txt"
 
 	# Try to get job file from output directory into the temporary files
+	log 1 "Downloading job ${JOB_ID} from server"
 	curl -f -o "${F_JOB}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -D "${F_HEADERS}" -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
 	[ $? -ne 0 ] && return 1
 
@@ -239,6 +240,11 @@ function download_jobs_fifo {
 
 		# Try to get job file
 		get_outfile ${JOB_ID}
+		if [ $? -eq 0 ]; then
+			log 1 "Job ${JOB_ID} completed"
+		else
+			log 1 "Job ${JOB_ID} could not be downloaded"
+		fi
 
 		# Keep the ID of the processed job
 		echo "${JOB_ID}" >> ${ROTATE_TMP}
