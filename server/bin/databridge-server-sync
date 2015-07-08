@@ -251,7 +251,7 @@ function download_jobs_fifo {
 
 		# Increment counter
 		let COUNTER++
-		if [ ${COUNTER} -lt ${DATABRIDGE_BULK_SIZE} ]; then
+		if [ ${COUNTER} -ge ${DATABRIDGE_BULK_SIZE} ]; then
 			log 1 "Reached bulk limit of ${DATABRIDGE_BULK_SIZE} in download"
 			break
 		fi
