@@ -418,6 +418,14 @@ fi
 # Source config
 . ${CONFIG_FILE}
 
+# Multiple instances trap
+PIDFILE=/var/run/databridge-server-sync.pid
+if [ -f "$PIDFILE" ] && kill -0 `cat $PIDFILE` 2>/dev/null; then
+    log 3 "Another instance is already running"
+    exit 1
+fi  
+echo $$ > $PIDFILE
+
 # Make sure we have input/output directories
 mkdir -p ${DATABRIDGE_INPUT_DIR}
 mkdir -p ${DATABRIDGE_OUTPUT_DIR}
