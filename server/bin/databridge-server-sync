@@ -228,7 +228,7 @@ function download_jobs_fifo {
 	cp -f ${DATABRIDGE_JOB_LIST} ${ROTATE_TMP}
 
 	# Repeat for a while
-	while true; then
+	while true; do
 
 		# Get next job from the output fifo
 		JOB_ID=$(curl -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_OUTQUEUE_URL}" 2>/dev/null)
@@ -250,7 +250,7 @@ function download_jobs_fifo {
 			break
 		fi
 
-	fi
+	done
 
 	# Expire and process rotation file
 	while read JOB; do
