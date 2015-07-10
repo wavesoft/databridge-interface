@@ -280,7 +280,7 @@ function download_jobs_fifo {
 
 				# Check if the job is expired expired job
 				let DELTA=$(date +%s)-${JOB_TS}
-				if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
+				if [[ ${DATABRIDGE_JOB_TIMEOUT} -gt 0 && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 					# Warn the user, and don't touch stale counter
 					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
@@ -395,7 +395,7 @@ function download_jobs_list {
 
 				# Check for expired job
 				let DELTA=$(date +%s)-${JOB_TS}
-				if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
+				if [[ ${DATABRIDGE_JOB_TIMEOUT} -gt 0 && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 					# Warn the user, and don't touch stale counter
 					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
@@ -462,7 +462,7 @@ function download_jobs_sequential {
 
 			# Check for expired job
 			let DELTA=$(date +%s)-${JOB_TS}
-			if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
+			if [[ ${DATABRIDGE_JOB_TIMEOUT} -gt 0 && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 				# Warn the user, and don't touch stale counter
 				log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
@@ -516,6 +516,9 @@ fi
 
 # Source config
 . ${CONFIG_FILE}
+
+# Set some defaults
+[ -z "${DATABRIDGE_JOB_TIMEOUT}" ] && DATABRIDGE_JOB_TIMEOUT=0
 
 # Multiple instances trap
 PIDFILE=/var/run/databridge-server-sync.pid
