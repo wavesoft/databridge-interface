@@ -280,7 +280,7 @@ function download_jobs_fifo {
 
 				# Check if the job is expired expired job
 				let DELTA=$(date +%s)-${JOB_TS}
-				if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+				if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 					# Warn the user, and don't touch stale counter
 					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
@@ -395,7 +395,7 @@ function download_jobs_list {
 
 				# Check for expired job
 				let DELTA=$(date +%s)-${JOB_TS}
-				if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+				if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 					# Warn the user, and don't touch stale counter
 					log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
@@ -462,7 +462,7 @@ function download_jobs_sequential {
 
 			# Check for expired job
 			let DELTA=$(date +%s)-${JOB_TS}
-			if [ ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]; then
+			if [[ ! -z "${DATABRIDGE_JOB_TIMEOUT}" && ${DELTA} -gt ${DATABRIDGE_JOB_TIMEOUT} ]]; then
 				# Warn the user, and don't touch stale counter
 				log 2 "Job ${JOB_ID} expired after ${DELTA} seconds"
 
