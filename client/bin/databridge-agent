@@ -94,14 +94,14 @@ function upload_jobdir {
 
     # Upload archive directory
     UPLOAD_URL="${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}"
-    ERROR_MSG=$(curl -X PUT --retry 2 --retry-delay 10 --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s -S "${UPLOAD_URL}" 2>&1)
+    ERROR_MSG=$(curl -f -k -L -s -S  -X PUT --retry 2 --retry-delay 10 --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" "${UPLOAD_URL}" 2>&1)
     if [ $? -ne 0 ]; then
         log "ERROR" "Unable to upload job to ${UPLOAD_URL}: ${ERROR_MSG}"
         return
     fi
 
     # Schedule the job to be picked-up by the output queue
-    ERROR_MSG=$(curl -f -X PUT --retry 2 --retry-delay 10 -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s -S "${DB_OUTPUT_QUEUE}" 2>&1)
+    ERROR_MSG=$(curl -f -k -L -s -S -X PUT --retry 2 --retry-delay 10 -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" -u "${AUTH_USER}:${AUTH_PASSWORD}" "${DB_OUTPUT_QUEUE}" 2>&1)
     if [ $? -ne 0 ]; then
         log "ERROR" "Unable to upload job description to ${DB_OUTPUT_QUEUE}: ${ERROR_MSG}"
         return
