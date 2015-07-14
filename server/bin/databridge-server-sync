@@ -151,7 +151,7 @@ function http_io {
 			fi
 		fi
 
-	elif [ "$VERB" == "CPUT" ]; then
+	elif [ "$VERB" == "CGET" ]; then
 
 		# Calculate the output file
 		[ -z "$FILE" ] && FILE="-"
