@@ -85,7 +85,7 @@ function http_io {
 	if [ "$VERB" == "GET" ]; then
 
 		# Call DAVIX-GET
-		davix-get -k \
+		davix-http -X GET -k \
 			--retry 2 --retry-delay 10 \
 			--key ${DATABRIDGE_SSL_KEY} \
 			--cert ${DATABRIDGE_SSL_CERT} \
@@ -95,8 +95,7 @@ function http_io {
 	elif [ "$VERB" == "PUT" ]; then
 
 		# Call DAVIX-PUT
-		davix-get -k \
-			--retry 2 --retry-delay 10 \
+		davix-put -k \
 			--key ${DATABRIDGE_SSL_KEY} \
 			--cert ${DATABRIDGE_SSL_CERT} \
 			${FILE} ${URL} 2>>${ERROR_FILE}
@@ -106,7 +105,6 @@ function http_io {
 
 		# Call DAVIX-RM
 		davix-rm -k \
-			--retry 2 --retry-delay 10 \
 			--key ${DATABRIDGE_SSL_KEY} \
 			--cert ${DATABRIDGE_SSL_CERT} \
 			${URL} 2>>${ERROR_FILE}
