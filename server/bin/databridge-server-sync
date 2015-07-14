@@ -64,7 +64,7 @@ function http_io {
 	shift
 
 	# Process custom argument (that *MUST* be first)
-	if [[ "$3" =~ ^--accept=.* ]]; then
+	if [[ "$1" =~ ^--accept=.* ]]; then
 		local ACCEPT=",${3:9},"
 		shift
 	fi
