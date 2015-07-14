@@ -56,10 +56,11 @@ function get_jobfile {
 
     # Get a job ID from the queue
     local NEXT_JOB_ID=$(curl -f -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_INPUT_QUEUE}" 2>/dev/null)
+    local RET=$?
 
     # If we got an error, return
-    if [ $? -ne 0 ]; then
-        log "ERROR" "Could not fetch next job ID from queue"
+    if [ $RET -ne 0 ]; then
+        log "ERROR" "Could not fetch next job ID from queue (CURL returned $RET)"
         return 1
     fi
 
@@ -68,7 +69,7 @@ function get_jobfile {
 
     # Download job file
     local JOB_FILE="${JOBDIR}/job.sh"
-    curl -f -o ${JOB_FILE} -u "${AUTH_USER}:${AUTH_PASSWORD}" -k -L -s "${DB_INPUT_URL}/${NEXT_JOB_ID}" 2>/dev/null
+    davix-get --userlogin "${AUTH_USER}" --userpass "${AUTH_PASSWORD}" -k "${DB_INPUT_URL}/${NEXT_JOB_ID}" "${JOB_FILE}"
 
     # If we got an error, return
     if [ $? -ne 0 ]; then
@@ -94,7 +95,7 @@ function upload_jobdir {
 
     # Upload archive directory
     UPLOAD_URL="${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}"
-    ERROR_MSG=$(curl -f -k -L -s -S  -X PUT --retry 2 --retry-delay 10 --upload "${ARCHIVE_FILE}" -u "${AUTH_USER}:${AUTH_PASSWORD}" "${UPLOAD_URL}" 2>&1)
+    davix-put --userlogin "${AUTH_USER}" --userpass "${AUTH_PASSWORD}" -k "${ARCHIVE_FILE}" "${UPLOAD_URL}"
     if [ $? -ne 0 ]; then
         log "ERROR" "Unable to upload job to ${UPLOAD_URL}: ${ERROR_MSG}"
         return
