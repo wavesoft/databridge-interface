@@ -43,6 +43,70 @@ function log {
 	fi
 }
 
+function log_error {
+	local ERROR_FILE="${TMP_DIR}/error.log"
+
+	# Log all non-empty lines as errors
+	while read LINE; do
+		[ ! -z "${LINE}" ] && log 3 ${LINE}
+	done < ${ERROR_FILE}
+
+	# Always return 0
+	return 0
+}
+
+function http_io {
+	local ERROR_FILE="${TMP_DIR}/error.log"
+	local VERB="$1"
+	local URL="$2"
+	local ACCEPT=",,"
+	shift
+	shift
+
+	# Process custom argument (that *MUST* be first)
+	if [[ "$3" =~ ^--accept=.* ]]; then
+		local ACCEPT=",${3:9},"
+		shift 
+	fi
+
+	# Reset error file
+	echo "" > ${ERROR_FILE}
+
+	# Log the action approprietly
+	if [ -z "${DATABRIDGE_LOG_FILE}" ]; then
+		echo "cURL ${VERB} on ${URL}" >> ${ERROR_FILE}
+	else
+		log 0 "cURL ${VERB} on ${URL}"
+	fi
+
+	# Execute CURL
+	curl -f -k -L \
+		--retry 2 --retry-delay 10 \
+		--key ${DATABRIDGE_SSL_KEY} \
+		--cert ${DATABRIDGE_SSL_CERT} \
+		-X ${VERB} \
+		$* \
+		${URL} 2>>${ERROR_FILE}
+	RET=$?
+
+	# Handle HTTP rerurn codes that should be accepted
+	if [ $RET -eq 22 ]; then
+
+		# Get the error code from the error file
+		CODE=$(cat ${ERROR_FILE} | grep 'curl: (22)' | awk -F'error: ' '{print $2}' | awk '{print $1}')
+
+		# Check if that code is listed in the accept list
+		if [[ "${ACCEPT}" == *,${CODE},* ]]; then
+			return 0
+		fi
+
+	fi
+
+	# Handle response
+	return ${RET}
+
+}
+
 function put_jobfile {
 	local FILE=$1
 
@@ -54,16 +118,22 @@ function put_jobfile {
 
 	# Upload file on input queue
 	log 1 "Uploading job file ${FILE}"
-	curl -f -X PUT --upload ${FILE} --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
-	[ $? -ne 0 ] && return 1
+	http_io PUT "${DATABRIDGE_INPUT_URL}/${JOB_ID}" --upload ${FILE}
+	[ $? -ne 0 ] && log_error && return 1
 	
 	# Upload job ID on FIFO	
 	log 1 "Uploading job description"
-	curl -f -X PUT -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_QUEUE_URL}"
+	http_io PUT "${DATABRIDGE_QUEUE_URL}" -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}"
 	if [ $? -ne 0 ]; then
+
+		# Log error
+		log_error
+
 		# Remove from queue
 		log 3 "Could not upload job description, removing job file"
-		curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+		http_io DELETE "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+		[ $? -ne 0 ] && log_error
+
 		# Return error
 		return 1
 	fi
@@ -103,8 +173,8 @@ function get_outfile {
 
 	# Try to get job file from output directory into the temporary files
 	log 1 "Downloading job ${JOB_ID} from server"
-	curl -f -o "${F_JOB}" --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s -D "${F_HEADERS}" -f "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-	[ $? -ne 0 ] && return 1
+	http_io GET "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" -o "${F_JOB}" -D "${F_HEADERS}"
+	[ $? -ne 0 ] && log_error && return 1
 
 	# Try to get Last-Modified header from response
 	H_LAST_MODIFIED=$(cat ${F_HEADERS} | grep Last-Modified | awk -F': ' '{print $2}')
@@ -144,8 +214,8 @@ function get_outfile {
 	fi
 
 	# Everything worked as expected, delete output (cleanup)
-	curl -f -X DELETE --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-	[ $? -ne 0 ] && log 2 "Unable to clean job output of job ${JOB_ID}"
+	http_io DELETE "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
+	[ $? -ne 0 ] && log_error && log 2 "Unable to clean job output of job ${JOB_ID}"
 
 	# Fire appropriate callback
 	if [ ! -z "${DATABRIDGE_CB_COMPLETED}" ]; then
@@ -223,6 +293,7 @@ function download_jobs_fifo {
 	local CHECK_ID=""
 	local ROTATE_TMP="${TMP_DIR}/joblist.tmp"
 	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
+	local JOB_ID_FILE="${TMP_DIR}/job.id"
 
 	# Copy the IDs of the jobs pending in the queue.
 	# This will help us at a later time to track changes.
@@ -232,11 +303,15 @@ function download_jobs_fifo {
 	while true; do
 
 		# Get next job from the output fifo
-		JOB_ID=$(curl -L -f --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -s "${DATABRIDGE_OUTQUEUE_URL}" 2>/dev/null)
-		if [ -z "$JOB_ID" ]; then
-			log 1 "No more jobs in the output queue"
+		http_io GET "${DATABRIDGE_OUTQUEUE_URL}" --accept=404 -o "${JOB_ID_FILE}"
+		if [ $? -ne 0 ]; then
+			log_error
+			log 3 "DataBridge Output Queue Error"
 			break
 		fi
+
+		# Get Job ID
+		JOB_ID=$(cat ${JOB_ID})
 
 		# Try to get job file
 		get_outfile ${JOB_ID}
@@ -326,9 +401,16 @@ function download_jobs_list {
 
 	# Download the list of jobs in the queue
 	log 1 "Enumerating files in the server output directory"
-	curl -f -X GET --key ${DATABRIDGE_SSL_KEY} --cert ${DATABRIDGE_SSL_CERT} -k -L -s "${DATABRIDGE_OUTPUT_URL}" | \
+	http_io GET "${DATABRIDGE_OUTPUT_URL}" | \
 		grep 'metalink"><a href="' | \
 		sed -r 's/.*metalink"><a href="([^"?]+).*/\1/' > ${LIST_SERVER}
+
+	# On CURL errors, log error
+	if [ ${PIPESTATUS[0]} -ne 0 ]; then
+		log_error
+		log 3 "Unable to enumerate files in the output directory"
+		return 1
+	fi
 
 	# Check if list is empty
 	if [ ! -s "${LIST_SERVER}" ]; then
