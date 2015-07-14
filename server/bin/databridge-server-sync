@@ -311,7 +311,7 @@ function download_jobs_fifo {
 		fi
 
 		# Get Job ID
-		JOB_ID=$(cat ${JOB_ID})
+		JOB_ID=$(cat ${JOB_ID_FILE})
 
 		# Try to get job file
 		get_outfile ${JOB_ID}
