@@ -89,7 +89,8 @@ function http_io {
 			--retry 2 --retry-delay 10 \
 			--key ${DATABRIDGE_SSL_KEY} \
 			--cert ${DATABRIDGE_SSL_CERT} \
-			${URL} > ${FILE} 2>>${ERROR_FILE}
+			-o ${FILE} \
+			${URL} 2>>${ERROR_FILE}
 		RET=$?
 
 	elif [ "$VERB" == "PUT" ]; then
