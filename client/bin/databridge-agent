@@ -48,28 +48,89 @@ DUMBQ_METRICS_BIN=$(which dumbq-metrics)
 # Log helper
 function log {
     # Echo log line with date
-    echo "[$(date '+%d/%m/%Y %H:%M:%S')] $1: $*"
+    local LEVEL=$1
+    shift
+    echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL}: $*" 1>&2
+}
+
+# DAVIX I/O Helper (file-based)
+function davix_io {
+    local VERB=$1
+    local URL=$2
+    local FILE=$3
+    local RET=0
+    local ERROR_MSG=""
+    shift; shift; shift
+
+    case $VERB in
+        GET) 
+            # Perform HTTP GET (davix-get also issues 'HEAD')
+            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+                -X GET -o ${FILE} "${URL}" 2>&1)
+            RET=$?
+            # Log Errors
+            [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+            ;;
+        PUT)
+            # Perform HTTP PUT
+            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+                ${FILE} "${URL}" 2>&1)
+            RET=$?
+            # Log Errors
+            [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+            ;;
+        *)
+            log "ERROR" "Unhandled HTTP Verb '${VERB}'"
+            ;;
+    esac
+
+    # Return exit code
+    return $RET
+}
+
+# CURL I/O Helper (payload-based)
+function curl_io {
+    local VERB=$1
+    local URL=$2
+    local RET=0
+    local ERROR_MSG=""
+    shift; shift
+
+    # Perform HTTP GET
+    exec 3>&1
+    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $* \
+        -f -s -S -L \
+        --retry 2 --retry-delay 10 \
+        -X ${VERB} "${URL}" 2>&1 1>&3)
+    RET=$?
+    exec 3>&-
+
+    # Log Errors
+    [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+
+    # Return exit code
+    return $RET
 }
 
 function get_jobfile {
     local JOBDIR=$1
 
     # Get a job ID from the queue
-    local NEXT_JOB_ID=$(curl -f -u "${AUTH_USER}:${AUTH_PASSWORD}" --header "userID: ${AUTH_USER}" -k -s "${DB_INPUT_QUEUE}" 2>/dev/null)
-    local RET=$?
-
-    # If we got an error, return
-    if [ $RET -ne 0 ]; then
-        log "ERROR" "Could not fetch next job ID from queue (CURL returned $RET)"
+    local NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
+    if [ $? -ne 0 ]; then
+        log "ERROR" "Could not fetch next job ID from queue"
         return 1
     fi
 
     # If queue is empty, return
-    [ -z "$NEXT_JOB_ID" ] && return 1
+    if [ -z "$NEXT_JOB_ID" ]; then
+        log "WARN" "The job description got from the input queue is empty!"
+        return 1
+    fi
 
     # Download job file
     local JOB_FILE="${JOBDIR}/job.sh"
-    davix-get --userlogin "${AUTH_USER}" --userpass "${AUTH_PASSWORD}" -k "${DB_INPUT_URL}/${NEXT_JOB_ID}" "${JOB_FILE}"
+    davix_io GET "${DB_INPUT_URL}/${NEXT_JOB_ID}" "${JOB_FILE}"
 
     # If we got an error, return
     if [ $? -ne 0 ]; then
@@ -95,14 +156,14 @@ function upload_jobdir {
 
     # Upload archive directory
     UPLOAD_URL="${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}"
-    davix-put --userlogin "${AUTH_USER}" --userpass "${AUTH_PASSWORD}" -k "${ARCHIVE_FILE}" "${UPLOAD_URL}"
+    davix_io PUT "${UPLOAD_URL}" "${ARCHIVE_FILE}"
     if [ $? -ne 0 ]; then
         log "ERROR" "Unable to upload job to ${UPLOAD_URL}: ${ERROR_MSG}"
         return
     fi
 
     # Schedule the job to be picked-up by the output queue
-    ERROR_MSG=$(curl -f -k -L -s -S -X PUT --retry 2 --retry-delay 10 -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}" -u "${AUTH_USER}:${AUTH_PASSWORD}" "${DB_OUTPUT_QUEUE}" 2>&1)
+    curl_io PUT "${DB_OUTPUT_QUEUE}" -F "userdata=${JOB_ID}" --header "userID: ${AUTH_USER}"
     if [ $? -ne 0 ]; then
         log "ERROR" "Unable to upload job description to ${DB_OUTPUT_QUEUE}: ${ERROR_MSG}"
         return

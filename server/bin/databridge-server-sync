@@ -37,150 +37,77 @@ function log {
 
 	# Check for log destination
 	if [ -z "${DATABRIDGE_LOG_FILE}" ]; then
-		echo "${LEVEL_STR}: $*"
+		echo "${LEVEL_STR}: $*" 1>&2
 	else
 		echo "$(date -R) ${LEVEL_STR}: $*" >> ${DATABRIDGE_LOG_FILE}
 	fi
 }
 
-function log_error {
-	local ERROR_FILE="${TMP_DIR}/error.log"
+# DAVIX I/O Helper (file-based)
+function davix_io {
+    local VERB=$1
+    local URL=$2
+    local FILE=$3
+    local RET=0
+    local ERROR_MSG=""
+    shift; shift; shift
 
-	# Log all non-empty lines as errors
-	while read LINE; do
-		[ ! -z "${LINE}" ] && log 3 ${LINE}
-	done < ${ERROR_FILE}
+    case $VERB in
+        GET) 
+            # Perform HTTP GET (davix-get also issues 'HEAD')
+            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+                -X GET -o ${FILE} "${URL}" 2>&1)
+            RET=$?
+            # Log Errors
+            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+            ;;
+        PUT)
+            # Perform HTTP PUT
+            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+                ${FILE} "${URL}" 2>&1)
+            RET=$?
+            # Log Errors
+            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+            ;;
+        DELETE)
+            # Perform HTTP DELETE
+            ERROR_MSG=$(davix-rm -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+                "${URL}" 2>&1)
+            RET=$?
+            # Log Errors
+            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+            ;;
+        *)
+            log 3 "Unhandled HTTP Verb '${VERB}'"
+            ;;
+    esac
 
-	# Always return 0
-	return 0
+    # Return exit code
+    return $RET
 }
 
-function http_io {
-	local ERROR_FILE="${TMP_DIR}/error.log"
-	local VERB="$1"
-	local URL="$2"
-	local FILE="$3"
-	local ACCEPT=",,"
-	shift
-	shift
-	shift
+# CURL I/O Helper (payload-based)
+function curl_io {
+    local VERB=$1
+    local URL=$2
+    local RET=0
+    local ERROR_MSG=""
+    shift; shift
 
-	# Process custom argument (that *MUST* be first)
-	if [[ "$1" =~ ^--accept=.* ]]; then
-		local ACCEPT=",${3:9},"
-		shift
-	fi
+    # Perform HTTP GET
+    exec 3>&1
+    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $* \
+        -f -s -S -L \
+        --retry 2 --retry-delay 10 \
+        -X ${VERB} "${URL}" 2>&1 1>&3)
+    RET=$?
+    exec 3>&-
 
-	# Reset error file
-	echo "" > ${ERROR_FILE}
+    # Log Errors
+    [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
 
-	# Log the action approprietly
-	if [ -z "${DATABRIDGE_LOG_FILE}" ]; then
-		echo "cURL ${VERB} on ${URL}" >> ${ERROR_FILE}
-	else
-		log 0 "cURL ${VERB} on ${URL}"
-	fi
-
-	# Execute DAVIX
-	if [ "$VERB" == "GET" ]; then
-
-		# Call DAVIX-GET
-		davix-http -X GET -k \
-			--retry 2 --retry-delay 10 \
-			--key ${DATABRIDGE_SSL_KEY} \
-			--cert ${DATABRIDGE_SSL_CERT} \
-			-o ${FILE} \
-			${URL} 2>>${ERROR_FILE}
-		RET=$?
-
-	elif [ "$VERB" == "PUT" ]; then
-
-		# Call DAVIX-PUT
-		davix-put -k \
-			--key ${DATABRIDGE_SSL_KEY} \
-			--cert ${DATABRIDGE_SSL_CERT} \
-			${FILE} ${URL} 2>>${ERROR_FILE}
-		RET=$?
-
-	elif [ "$VERB" == "DELETE" ]; then
-
-		# Call DAVIX-RM
-		davix-rm -k \
-			--key ${DATABRIDGE_SSL_KEY} \
-			--cert ${DATABRIDGE_SSL_CERT} \
-			${URL} 2>>${ERROR_FILE}
-		RET=$?
-
-	elif [ "$VERB" == "CPUT" ]; then
-
-		if [ -z "$FILE" ]; then
-
-			# Execute CURL without file
-			curl -f -k -L -s -S \
-				--retry 2 --retry-delay 10 \
-				--key ${DATABRIDGE_SSL_KEY} \
-				--cert ${DATABRIDGE_SSL_CERT} \
-				-X ${VERB} \
-				$* \
-				${URL} 2>>${ERROR_FILE}
-			RET=$?
-
-		else
-
-			# Execute CURL with a file to upload
-			curl -f -k -L -s -S \
-				--retry 2 --retry-delay 10 \
-				--key ${DATABRIDGE_SSL_KEY} \
-				--cert ${DATABRIDGE_SSL_CERT} \
-				--upload ${FILE} \
-				-X ${VERB} \
-				$* \
-				${URL} 2>>${ERROR_FILE}
-			RET=$?
-
-		fi
-
-		# Handle HTTP rerurn codes that should be accepted
-		if [ $RET -eq 22 ]; then
-			# Get the error code from the error file
-			CODE=$(cat ${ERROR_FILE} | grep 'curl: (22)' | awk -F'error: ' '{print $2}' | awk '{print $1}')
-			# Check if that code is listed in the accept list
-			if [[ "${ACCEPT}" == *,${CODE},* ]]; then
-				return 0
-			fi
-		fi
-
-	elif [ "$VERB" == "CGET" ]; then
-
-		# Calculate the output file
-		[ -z "$FILE" ] && FILE="-"
-
-		# Execute CURL without file
-		curl -f -k -L -s -S \
-			--retry 2 --retry-delay 10 \
-			--key ${DATABRIDGE_SSL_KEY} \
-			--cert ${DATABRIDGE_SSL_CERT} \
-			-X ${VERB} \
-			-o ${FILE} \
-			$* \
-			${URL} 2>>${ERROR_FILE}
-		RET=$?
-
-		# Handle HTTP rerurn codes that should be accepted
-		if [ $RET -eq 22 ]; then
-			# Get the error code from the error file
-			CODE=$(cat ${ERROR_FILE} | grep 'curl: (22)' | awk -F'error: ' '{print $2}' | awk '{print $1}')
-			# Check if that code is listed in the accept list
-			if [[ "${ACCEPT}" == *,${CODE},* ]]; then
-				return 0
-			fi
-		fi
-
-	fi
-
-	# Handle response
-	return ${RET}
-
+    # Return exit code
+    return $RET
 }
 
 function put_jobfile {
@@ -195,12 +122,12 @@ function put_jobfile {
 
 	# Upload file on input queue
 	log 1 "Uploading job file ${FILE}"
-	http_io PUT "${DATABRIDGE_INPUT_URL}/${JOB_ID}" "${FILE}"
+	davix_io PUT "${DATABRIDGE_INPUT_URL}/${JOB_ID}" "${FILE}"
 	[ $? -ne 0 ] && log_error && return 1
 	
 	# Upload job ID on FIFO	
 	log 1 "Uploading job description"
-	http_io CPUT "${DATABRIDGE_QUEUE_URL}" "" -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}"
+	curl_io PUT "${DATABRIDGE_QUEUE_URL}" -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}"
 	if [ $? -ne 0 ]; then
 
 		# Log error
@@ -208,7 +135,7 @@ function put_jobfile {
 
 		# Remove from queue
 		log 3 "Could not upload job description, removing job file"
-		http_io DELETE "${DATABRIDGE_INPUT_URL}/${JOB_ID}" ""
+		davix_io DELETE "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 		[ $? -ne 0 ] && log_error
 
 		# Return error
@@ -238,33 +165,18 @@ function put_jobfile {
 
 function get_outfile {
 	local JOB_ID=$1
-	local F_JOB=""
-	local F_HEADERS=""
 	local H_LAST_MODIFIED=""
 	local JOB_DATE=""
 	local JOB_OUTPUT_DIR=""
-
-	# Temporary files
-	F_JOB="${TMP_DIR}/jobout${DATABRIDGE_OUTPUT_EXT}"
-	F_HEADERS="${TMP_DIR}/headers.txt"
+	local F_JOB="${TMP_DIR}/jobout${DATABRIDGE_OUTPUT_EXT}"
 
 	# Try to get job file from output directory into the temporary files
 	log 1 "Downloading job ${JOB_ID} from server"
-	http_io GET "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" "${F_JOB}" -D "${F_HEADERS}"
+	davix_io GET "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" "${F_JOB}"
 	[ $? -ne 0 ] && log_error && return 1
 
-	# Try to get Last-Modified header from response
-	H_LAST_MODIFIED=$(cat ${F_HEADERS} | grep Last-Modified | awk -F': ' '{print $2}')
-
-	# Fallback to 'now' if we don't have a Last-Modified header
-	if [ -z "${H_LAST_MODIFIED}" ]; then
-		JOB_DATE=$(date +%Y%m%d)
-	else
-		JOB_DATE=$(date +%Y%m%d -d "${H_LAST_MODIFIED}")
-	fi
-
 	# Make sure directory exists
-	JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/${JOB_DATE}"
+	JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/$(date +%Y%m%d)"
 	if [ ! -d "${JOB_OUTPUT_DIR}" ]; then
 
 		# Create directory
@@ -291,7 +203,7 @@ function get_outfile {
 	fi
 
 	# Everything worked as expected, delete output (cleanup)
-	http_io DELETE "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" ""
+	davix_io DELETE "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
 	[ $? -ne 0 ] && log_error && log 2 "Unable to clean job output of job ${JOB_ID}"
 
 	# Fire appropriate callback
@@ -380,7 +292,7 @@ function download_jobs_fifo {
 	while true; do
 
 		# Get next job from the output fifo
-		http_io CGET "${DATABRIDGE_OUTQUEUE_URL}" "${JOB_ID_FILE}" --accept=404
+		JOB_ID=$(curl_io GET "${DATABRIDGE_OUTQUEUE_URL}")
 		if [ $? -ne 0 ]; then
 			log_error
 			log 3 "DataBridge Output Queue Error"
@@ -478,7 +390,7 @@ function download_jobs_list {
 
 	# Download the list of jobs in the queue
 	log 1 "Enumerating files in the server output directory"
-	http_io GET "${DATABRIDGE_OUTPUT_URL}" "" | \
+	curl_io GET "${DATABRIDGE_OUTPUT_URL}" | \
 		grep 'metalink"><a href="' | \
 		sed -r 's/.*metalink"><a href="([^"?]+).*/\1/' > ${LIST_SERVER}
 
