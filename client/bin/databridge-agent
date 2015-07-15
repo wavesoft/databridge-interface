@@ -65,7 +65,7 @@ function davix_io {
     case $VERB in
         GET) 
             # Perform HTTP GET (davix-get also issues 'HEAD')
-            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
                 -X GET -o ${FILE} "${URL}" 2>&1)
             RET=$?
             # Log Errors
@@ -73,7 +73,7 @@ function davix_io {
             ;;
         PUT)
             # Perform HTTP PUT
-            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $* \
+            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
                 ${FILE} "${URL}" 2>&1)
             RET=$?
             # Log Errors
@@ -98,7 +98,7 @@ function curl_io {
 
     # Perform HTTP GET
     exec 3>&1
-    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $* \
+    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $@ \
         -f -s -S -L \
         --retry 2 --retry-delay 10 \
         -X ${VERB} "${URL}" 2>&1 1>&3)
