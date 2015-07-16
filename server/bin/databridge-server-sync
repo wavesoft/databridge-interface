@@ -155,20 +155,17 @@ function put_jobfile {
 	# Upload file on input queue
 	log 1 "Uploading job file ${FILE}"
 	davix_io PUT "${DATABRIDGE_INPUT_URL}/${JOB_ID}" "${FILE}"
-	[ $? -ne 0 ] && log_error && return 1
+	[ $? -ne 0 ] && return 1
 	
 	# Upload job ID on FIFO	
 	log 1 "Uploading job description"
 	curl_io PUT "${DATABRIDGE_QUEUE_URL}" -F "userdata=${JOB_ID}" --header "jobID: ${JOB_ID}"
 	if [ $? -ne 0 ]; then
 
-		# Log error
-		log_error
-
 		# Remove from queue
 		log 3 "Could not upload job description, removing job file"
 		davix_io DELETE "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
-		[ $? -ne 0 ] && log_error
+		[ $? -ne 0 ] && log 3 "Unable to delete input file: ${DATABRIDGE_INPUT_URL}/${JOB_ID}"
 
 		# Return error
 		return 1
@@ -205,7 +202,7 @@ function get_outfile {
 	# Try to get job file from output directory into the temporary files
 	log 1 "Downloading job ${JOB_ID} from server"
 	davix_io GET "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" "${F_JOB}"
-	[ $? -ne 0 ] && log_error && return 1
+	[ $? -ne 0 ] && return 1
 
 	# Make sure directory exists
 	JOB_OUTPUT_DIR="${DATABRIDGE_OUTPUT_DIR}/$(date +%Y%m%d)"
@@ -236,7 +233,7 @@ function get_outfile {
 
 	# Everything worked as expected, delete output (cleanup)
 	davix_io DELETE "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-	[ $? -ne 0 ] && log_error && log 2 "Unable to clean job output of job ${JOB_ID}"
+	[ $? -ne 0 ] && log 2 "Unable to clean job output of job ${JOB_ID}"
 
 	# Fire appropriate callback
 	if [ ! -z "${DATABRIDGE_CB_COMPLETED}" ]; then
@@ -325,7 +322,6 @@ function download_jobs_fifo {
 		# Get next job from the output fifo
 		JOB_ID=$(curl_io GET "${DATABRIDGE_OUTQUEUE_URL}")
 		if [ $? -ne 0 ]; then
-			log_error
 			log 3 "DataBridge Output Queue Error"
 			break
 		fi
@@ -424,7 +420,6 @@ function download_jobs_list {
 
 	# On CURL errors, log error
 	if [ ${PIPESTATUS[0]} -ne 0 ]; then
-		log_error
 		log 3 "Unable to enumerate files in the output directory"
 		return 1
 	fi
