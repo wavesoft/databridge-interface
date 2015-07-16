@@ -307,7 +307,6 @@ function download_jobs_fifo {
 	local CHECK_ID=""
 	local ROTATE_TMP="${TMP_DIR}/joblist.tmp"
 	local ROTATE_FILE="${TMP_DIR}/joblist.rotate"
-	local JOB_ID_FILE="${TMP_DIR}/job.id"
 
 	# Copy the IDs of the jobs pending in the queue.
 	# This will help us at a later time to track changes.
@@ -323,9 +322,6 @@ function download_jobs_fifo {
 			log 3 "DataBridge Output Queue Error"
 			break
 		fi
-
-		# Get Job ID
-		JOB_ID=$(cat ${JOB_ID_FILE})
 
 		# Try to get job file
 		get_outfile ${JOB_ID}
