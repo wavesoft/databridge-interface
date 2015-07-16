@@ -21,10 +21,17 @@
 # Where the server configuration of DataBridge server-sync is located
 CONFIG_FILE="/etc/databridge/server.conf"
 
+# Minimum log level
+LOG_LEVEL=1
+
 function log {
 	local LEVEL=$1
 	local LEVEL_STR="DEBUG"
 	shift
+
+	# Do not log levels lower than
+	# the ones specified
+	[ $LEVEL -lt $LOG_LEVEL ] && return
 
 	# Translate level to string
 	if [ $LEVEL -eq 1 ]; then
@@ -598,7 +605,7 @@ function download_jobs_sequential {
 }
 
 # Check for override in the config file
-[ ! -z "$1" ] && CONFIG_FILE=$1
+[ ! -z "$1" ] && CONFIG_FILE=$1 && shift
 
 # Lookup for the config
 if [ ! -f ${CONFIG_FILE} ]; then
@@ -611,6 +618,14 @@ fi
 
 # Set some defaults
 [ -z "${DATABRIDGE_JOB_TIMEOUT}" ] && DATABRIDGE_JOB_TIMEOUT=0
+
+# Override log level from the command line
+for L in $@; do
+	case $L in
+		--debug) LOG_LEVEL=0
+				 ;;
+	esac
+done
 
 # Multiple instances trap
 PIDFILE=/var/run/databridge-server-sync.pid
