@@ -316,6 +316,9 @@ function download_jobs_fifo {
 	# This will help us at a later time to track changes.
 	cp -f ${DATABRIDGE_JOB_LIST} ${ROTATE_TMP}
 
+	# Make sure we have a rotate file
+	touch ${ROTATE_FILE}
+
 	# Repeat for a while
 	while true; do
 
