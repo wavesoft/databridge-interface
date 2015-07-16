@@ -199,6 +199,11 @@ function get_outfile {
 	local JOB_OUTPUT_DIR=""
 	local F_JOB="${TMP_DIR}/jobout${DATABRIDGE_OUTPUT_EXT}"
 
+	# Delete input file one way or another
+	log 1 "Deleting input data of job ${JOB_ID}"
+	davix_io DELETE "${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+	[ $? -ne 0 ] && log 2 "Unable to clean job input ${DATABRIDGE_INPUT_URL}/${JOB_ID}"
+
 	# Try to get job file from output directory into the temporary files
 	log 1 "Downloading job ${JOB_ID} from server"
 	davix_io GET "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz" "${F_JOB}"
@@ -233,7 +238,7 @@ function get_outfile {
 
 	# Everything worked as expected, delete output (cleanup)
 	davix_io DELETE "${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
-	[ $? -ne 0 ] && log 2 "Unable to clean job output of job ${JOB_ID}"
+	[ $? -ne 0 ] && log 2 "Unable to clean job output ${DATABRIDGE_OUTPUT_URL}/${JOB_ID}.tgz"
 
 	# Fire appropriate callback
 	if [ ! -z "${DATABRIDGE_CB_COMPLETED}" ]; then
