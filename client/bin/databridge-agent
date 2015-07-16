@@ -28,6 +28,20 @@ AUTH_PASSWORD="$2"
 [ -z "$AUTH_PASSWORD" ] && echo "ERROR: Please specify the authentication password!" && exit 2
 [ ! -z "$3" ] && DB_URL="$3"
 
+# Handle other command-line arguments
+DEBUG=0
+for I in $@; do
+    case $I in
+        --debug)
+            # Enable debug logging
+            DEBUG=1
+            ;;
+        *)
+            echo "ERROR: Unknown argument '$I'" >&2
+            ;;
+    esac
+done
+
 # Define URLs using base URL as reference
 DB_INPUT_QUEUE="${DB_URL}/boinc-client/get-job.cgi"
 DB_OUTPUT_QUEUE="${DB_URL}/boinc-client/put-jobout.cgi"
@@ -50,6 +64,8 @@ function log {
     # Echo log line with date
     local LEVEL=$1
     shift
+    # Skip debug logs unless enabled
+    [[ "$LEVEL" == "DEBUG" && $DEBUG -eq 0 ]] && return
     # Process multiline buffers
     while read L; do
         echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL}: $L" 1>&2
