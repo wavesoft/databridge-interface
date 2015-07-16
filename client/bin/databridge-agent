@@ -24,9 +24,10 @@ DB_URL="https://t4t-data-bridge.cern.ch"
 # We will need the BOINC UserID and BOINC Authenticator as the first two parameters
 AUTH_USER="$1"
 AUTH_PASSWORD="$2"
+shift; shift;
 [ -z "$AUTH_USER" ] && echo "ERROR: Please specify the authentication username!" && exit 2
 [ -z "$AUTH_PASSWORD" ] && echo "ERROR: Please specify the authentication password!" && exit 2
-[ ! -z "$3" ] && DB_URL="$3"
+[ ! -z "$1" ] && DB_URL="$1" && shift
 
 # Handle other command-line arguments
 DEBUG=0
