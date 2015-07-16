@@ -50,7 +50,10 @@ function log {
     # Echo log line with date
     local LEVEL=$1
     shift
-    echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL}: $*" 1>&2
+    # Process multiline buffers
+    while read L; do
+        echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL}: $L" 1>&2
+    done <<< "$*"
 }
 
 # DAVIX I/O Helper (file-based)
@@ -62,27 +65,47 @@ function davix_io {
     local ERROR_MSG=""
     shift; shift; shift
 
+    # Extra args
+    local CMDLINE="-k -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD}"
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+
+    # Handle verb accordint to case
     case $VERB in
-        GET) 
-            # Perform HTTP GET (davix-get also issues 'HEAD')
-            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
-                -X GET -o ${FILE} "${URL}" 2>&1)
-            RET=$?
-            # Log Errors
-            [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+        GET)
+            # Use davix-http for GET request
+            CMDLINE="davix-http -X GET $CMDLINE -o ${FILE} \"${URL}\""
             ;;
         PUT)
-            # Perform HTTP PUT
-            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
-                ${FILE} "${URL}" 2>&1)
-            RET=$?
-            # Log Errors
-            [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+            # Use davix-http for GET request
+            CMDLINE="davix-put $CMDLINE ${FILE} \"${URL}\""
+            ;;
+        DELETE)
+            # Use davix-http for GET request
+            CMDLINE="davix-rm $CMDLINE \"${URL}\""
             ;;
         *)
             log "ERROR" "Unhandled HTTP Verb '${VERB}'"
+            return 200
             ;;
     esac
+
+    # Perform HTTP GET (davix-get also issues 'HEAD')
+    log DEBUG "Executing $CMDLINE"
+    exec 3>&1
+    ERROR_MSG=$(eval $CMDLINE 2>&1)
+    RET=$?
+    exec 3>&-
+
+    # Log Errors
+    [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
 
     # Return exit code
     return $RET
@@ -94,14 +117,27 @@ function curl_io {
     local URL=$2
     local RET=0
     local ERROR_MSG=""
+    local WHITESPACE="[[:space:]]"
     shift; shift
 
+    # Extra args
+    local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
+    CMDLINE="${CMDLINE} -f -s -S -L --retry 2 --retry-delay 10 -X ${VERB}"
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+    CMDLINE="${CMDLINE} \"${URL}\""
+
     # Perform HTTP GET
+    log DEBUG "Executing $CMDLINE"
     exec 3>&1
-    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $@ \
-        -f -s -S -L \
-        --retry 2 --retry-delay 10 \
-        -X ${VERB} "${URL}" 2>&1 1>&3)
+    ERROR_MSG=$(eval $CMDLINE 2>&1 1>&3)
     RET=$?
     exec 3>&-
 
@@ -114,9 +150,10 @@ function curl_io {
 
 function get_jobfile {
     local JOBDIR=$1
+    local NEXT_JOB_ID=""
 
     # Get a job ID from the queue
-    local NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
+    NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
     if [ $? -ne 0 ]; then
         log "ERROR" "Could not fetch next job ID from queue"
         return 1

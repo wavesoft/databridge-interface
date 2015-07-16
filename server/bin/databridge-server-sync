@@ -52,35 +52,47 @@ function davix_io {
     local ERROR_MSG=""
     shift; shift; shift
 
+    # Extra args
+    local CMDLINE="-k -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD}"
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+
+    # Handle verb accordint to case
     case $VERB in
-        GET) 
-            # Perform HTTP GET (davix-get also issues 'HEAD')
-            ERROR_MSG=$(davix-http -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
-                -X GET -o ${FILE} "${URL}" 2>&1)
-            RET=$?
-            # Log Errors
-            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+        GET)
+            # Use davix-http for GET request
+            CMDLINE="davix-http -X GET $CMDLINE -o ${FILE} \"${URL}\""
             ;;
         PUT)
-            # Perform HTTP PUT
-            ERROR_MSG=$(davix-put -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
-                ${FILE} "${URL}" 2>&1)
-            RET=$?
-            # Log Errors
-            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+            # Use davix-http for GET request
+            CMDLINE="davix-put $CMDLINE ${FILE} \"${URL}\""
             ;;
         DELETE)
-            # Perform HTTP DELETE
-            ERROR_MSG=$(davix-rm -k --userlogin ${AUTH_USER} --userpass ${AUTH_PASSWORD} $@ \
-                "${URL}" 2>&1)
-            RET=$?
-            # Log Errors
-            [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
+            # Use davix-http for GET request
+            CMDLINE="davix-rm $CMDLINE \"${URL}\""
             ;;
         *)
             log 3 "Unhandled HTTP Verb '${VERB}'"
+            return 200
             ;;
     esac
+
+    # Perform HTTP GET (davix-get also issues 'HEAD')
+    log 0 "Executing $CMDLINE"
+    exec 3>&1
+    ERROR_MSG=$(eval $CMDLINE 2>&1)
+    RET=$?
+    exec 3>&-
+
+    # Log Errors
+    [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
 
     # Return exit code
     return $RET
@@ -92,14 +104,27 @@ function curl_io {
     local URL=$2
     local RET=0
     local ERROR_MSG=""
+    local WHITESPACE="[[:space:]]"
     shift; shift
 
+    # Extra args
+    local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
+    CMDLINE="${CMDLINE} -f -s -S -L --retry 2 --retry-delay 10 -X ${VERB}"
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+    CMDLINE="${CMDLINE} \"${URL}\""
+
     # Perform HTTP GET
+    log 0 "Executing $CMDLINE"
     exec 3>&1
-    ERROR_MSG=$(curl -k -u "${AUTH_USER}:${AUTH_PASSWORD}" $@ \
-        -f -s -S -L \
-        --retry 2 --retry-delay 10 \
-        -X ${VERB} "${URL}" 2>&1 1>&3)
+    ERROR_MSG=$(eval $CMDLINE 2>&1 1>&3)
     RET=$?
     exec 3>&-
 
