@@ -201,7 +201,6 @@ function upload_jobdir {
     local JOBDIR=$1
     local JOB_ID=$2
     local USER_DATA=$3
-    local ERROR_MSG=""
     local UPLOAD_URL=""
 
     # Archive job directory
@@ -212,14 +211,14 @@ function upload_jobdir {
     UPLOAD_URL="${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}"
     davix_io PUT "${UPLOAD_URL}" "${ARCHIVE_FILE}"
     if [ $? -ne 0 ]; then
-        log "ERROR" "Unable to upload job to ${UPLOAD_URL}: ${ERROR_MSG}"
+        log "ERROR" "Unable to upload job to ${UPLOAD_URL}"
         return
     fi
 
     # Schedule the job to be picked-up by the output queue
     curl_io PUT "${DB_OUTPUT_QUEUE}" -F "userdata=${JOB_ID}" --header "userID: ${AUTH_USER}"
     if [ $? -ne 0 ]; then
-        log "ERROR" "Unable to upload job description to ${DB_OUTPUT_QUEUE}: ${ERROR_MSG}"
+        log "ERROR" "Unable to upload job description to ${DB_OUTPUT_QUEUE}"
         return
     fi
 
