@@ -96,7 +96,7 @@ function davix_io {
     shift; shift; shift
 
     # Extra args
-    local CMDLINE="-k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
+    local CMDLINE="-k --userlogin \"${AUTH_USER}\" --userpass \"${AUTH_PASSWORD}\""
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
@@ -167,7 +167,7 @@ function curl_io {
     shift; shift
 
     # Extra args
-    local CMDLINE="curl -k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
+    local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
     CMDLINE="${CMDLINE} -f -s -S -L --retry 3 --retry-delay 10 -X ${VERB}"
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
