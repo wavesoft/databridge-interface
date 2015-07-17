@@ -1,2 +1,4 @@
 
 *.local
+
+client/bin/davix-server-test
