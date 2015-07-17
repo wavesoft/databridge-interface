@@ -44,9 +44,17 @@ function log {
 
 	# Check for log destination
 	if [ -z "${DATABRIDGE_LOG_FILE}" ]; then
-		echo "${LEVEL_STR}: $*" 1>&2
+	    # Process multiline buffers
+	    while read L; do
+	    	[ -z "$L" ] && continue
+	        echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL_STR}: $L" 1>&2
+	    done <<< "$*"
 	else
-		echo "$(date -R) ${LEVEL_STR}: $*" >> ${DATABRIDGE_LOG_FILE}
+	    # Process multiline buffers
+	    while read L; do
+	    	[ -z "$L" ] && continue
+	        echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL_STR}: $L" >> ${DATABRIDGE_LOG_FILE}
+	    done <<< "$*"
 	fi
 }
 
