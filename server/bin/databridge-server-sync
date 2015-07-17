@@ -65,6 +65,7 @@ function davix_io {
     local FILE=$3
     local RET=256
     local ERROR_MSG=""
+	local DAVIX_LOG="${TMP_DIR}/davix-debug.log"
     local RETRIES=3
     shift; shift; shift
 
@@ -79,6 +80,11 @@ function davix_io {
             CMDLINE="$CMDLINE $ARG"
         fi
     done
+
+    # Check if we should enable davix debugging
+    if [[ $LOG_LEVEL -le 0 ]]; then
+    	CMDLINE="$CMDLINE --debug"
+    fi
 
     # Handle verb accordint to case
     case $VERB in
