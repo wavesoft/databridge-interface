@@ -90,12 +90,13 @@ function davix_io {
     local VERB=$1
     local URL=$2
     local FILE=$3
-    local RET=0
+    local RET=256
     local ERROR_MSG=""
+    local RETRIES=3
     shift; shift; shift
 
     # Extra args
-    local CMDLINE="-k -k --userlogin \"${AUTH_USER}\" --userpass \"${AUTH_PASSWORD}\""
+    local CMDLINE="-k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
@@ -109,29 +110,45 @@ function davix_io {
     # Handle verb accordint to case
     case $VERB in
         GET)
-            # Use davix-http for GET request
-            CMDLINE="davix-http -X GET $CMDLINE -o ${FILE} \"${URL}\""
+            # Use davix-get to download a file
+            CMDLINE="davix-get $CMDLINE \"${URL}\" ${FILE}"
             ;;
         PUT)
-            # Use davix-http for GET request
+            # Use davix-put to upload a file
             CMDLINE="davix-put $CMDLINE ${FILE} \"${URL}\""
             ;;
         DELETE)
-            # Use davix-http for GET request
+            # Use davix-rm to delete a file
             CMDLINE="davix-rm $CMDLINE \"${URL}\""
             ;;
         *)
-            log 3 "Unhandled HTTP Verb '${VERB}'"
+            log 3 "Unhandled DAVIX Verb '${VERB}'"
             return 200
             ;;
     esac
 
-    # Perform HTTP GET (davix-get also issues 'HEAD')
-    log 0 "Executing $CMDLINE"
-    exec 3>&1
-    ERROR_MSG=$(eval $CMDLINE 2>&1)
-    RET=$?
-    exec 3>&-
+    # Repeat command if it fails
+    while true; do
+
+        # Perform DAVOX I/O
+        log 0 "Executing $CMDLINE"
+        exec 3>&1
+        ERROR_MSG=$(eval $CMDLINE 2>&1)
+        RET=$?
+        exec 3>&-
+        log 0 "Exited with $RET"
+
+        # If this was an error, retry
+        if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
+            let RETRIES--
+            log 3 "$ERROR_MSG"
+            log 1 "In 10 sec will retry a DAVIX ${VERB} to ${URL}"
+            sleep 10
+        else
+            break
+        fi
+
+    done
 
     # Log Errors
     [ $RET -ne 0 ] && log 3 "$ERROR_MSG"
@@ -150,8 +167,8 @@ function curl_io {
     shift; shift
 
     # Extra args
-    local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
-    CMDLINE="${CMDLINE} -f -s -S -L --retry 3 --retry-delay 15 -X ${VERB}"
+    local CMDLINE="curl -k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
+    CMDLINE="${CMDLINE} -f -s -S -L --retry 3 --retry-delay 10 -X ${VERB}"
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
