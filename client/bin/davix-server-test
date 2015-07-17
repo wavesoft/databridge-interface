@@ -1,0 +1,168 @@
+#!/bin/bash
+
+# We will need the BOINC UserID and BOINC Authenticator as the first two parameters
+AUTH_USER="35331"
+AUTH_PASSWORD="4c2ce9458a4750eafd589c9b4269fc2b"
+DEBUG=1
+
+# Define URLs using base URL as reference
+DB_URL="https://t4t-data-bridge.cern.ch"
+DB_INPUT_QUEUE="${DB_URL}/boinc-client/get-job.cgi"
+DB_OUTPUT_QUEUE="${DB_URL}/boinc-client/put-jobout.cgi"
+DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
+DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
+
+# Log helper
+function log {
+    # Echo log line with date
+    local LEVEL=$1
+    shift
+    # Skip debug logs unless enabled
+    [[ "$LEVEL" == "DEBUG" && $DEBUG -eq 0 ]] && return
+    # Process multiline buffers
+    while read L; do
+        echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL}: $L" 1>&2
+    done <<< "$*"
+}
+
+# DAVIX I/O Helper (file-based)
+function davix_io {
+    local VERB=$1
+    local URL=$2
+    local FILE=$3
+    local RET=0
+    local ERROR_MSG=""
+    shift; shift; shift
+
+    # Extra args
+    local CMDLINE="-k -k --userlogin \"${AUTH_USER}\" --userpass \"${AUTH_PASSWORD}\""
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+
+    # Handle verb accordint to case
+    case $VERB in
+        GET)
+            # Use davix-http for GET request
+            CMDLINE="davix-http -X GET $CMDLINE -o ${FILE} \"${URL}\""
+            ;;
+        PUT)
+            # Use davix-http for GET request
+            CMDLINE="davix-put $CMDLINE ${FILE} \"${URL}\""
+            ;;
+        DELETE)
+            # Use davix-http for GET request
+            CMDLINE="davix-rm $CMDLINE \"${URL}\""
+            ;;
+        *)
+            log "ERROR" "Unhandled HTTP Verb '${VERB}'"
+            return 200
+            ;;
+    esac
+
+    # Perform HTTP GET (davix-get also issues 'HEAD')
+    log DEBUG "Executing $CMDLINE"
+    exec 3>&1
+    ERROR_MSG=$(eval $CMDLINE 2>&1)
+    RET=$?
+    exec 3>&-
+
+    log DEBUG "davix returned $RET"
+
+    # Log Errors
+    [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+
+    # Return exit code
+    return $RET
+}
+
+# CURL I/O Helper (payload-based)
+function curl_io {
+    local VERB=$1
+    local URL=$2
+    local RET=0
+    local ERROR_MSG=""
+    local WHITESPACE="[[:space:]]"
+    shift; shift
+
+    # Extra args
+    local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
+    CMDLINE="${CMDLINE} -f -s -S -L --retry 2 --retry-delay 10 -X ${VERB}"
+    for (( i = 1; i <= $# ; i++ )); do
+        eval ARG=\$$i
+        if [[ $ARG =~ $WHITESPACE ]]
+        then
+            CMDLINE="$CMDLINE \"$ARG\""
+        else
+            CMDLINE="$CMDLINE $ARG"
+        fi
+    done
+    CMDLINE="${CMDLINE} \"${URL}\""
+
+    # Perform HTTP GET
+    log DEBUG "Executing $CMDLINE"
+    exec 3>&1
+    ERROR_MSG=$(eval $CMDLINE 2>&1 1>&3)
+    RET=$?
+    exec 3>&-
+
+    log DEBUG "curl returned $RET"
+
+    # Log Errors
+    [ $RET -ne 0 ] && log "ERROR" "$ERROR_MSG"
+
+    # Return exit code
+    return $RET
+}
+
+# Create a junk file
+[ ! -f blob ] && dd if=/dev/urandom of=blob bs=512 count=128
+VALID_HASH=$(shasum -a1 blob | awk '{print $1}')
+
+FAILURES=0
+I=0
+while [ $I -lt 100 ]; do
+
+    # Sleep a while
+    sleep 1
+
+    # Prepare next iteration
+    let I++
+    UUID=$(uuidgen)
+    URL="${DB_OUTPUT_URL}/test-${UUID}.tar.gz"
+    log INFO "Test #$I, delay $I, ($UUID)"
+
+    # Upload the blob
+    davix_io PUT "${URL}" blob
+    [ $? -ne 0 ] && log ERROR "Unable to upload to ${URL}" && continue
+
+    # Wait for a while
+    log INFO "Delaying for $I sec"
+    sleep $I
+
+    # Download the blob
+    davix_io GET "${URL}" inblob
+    [ $? -ne 0 ] && log ERROR "Unable to download from ${URL}"
+
+    # Delete the blob
+    davix_io DELETE "${URL}" inblob
+    [ $? -ne 0 ] && log ERROR "Unable to delete url ${URL}" && continue
+
+    # Check hash
+    CHECK_HASH=$(shasum -a1 inblob | awk '{print $1}')
+    if [ "$CHECK_HASH" != "$VALID_HASH" ]; then
+        log ERROR "!!!! Hash mismatch between download and upload"
+    else
+        log INFO "++++ Hash matches, I/O successful after $I sec delay"
+    fi
+
+done
+
+# Remove blobs
+rm blob inblob
