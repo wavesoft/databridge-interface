@@ -59,10 +59,12 @@ class DataBridgeQueue:
 
 		# Apply 'notify' changes
 		if 'notify' in self._config:
+			# Initialize targets
 			self.notifier.removeAllTargets()
-
-			# Split on comma and include targets
 			for machine in self._config['notify'].split(","):
+				# Skip empty entries
+				if not machine:
+					continue
 				self.notifier.addTarget( machine )
 
 	def config(self, parm, value=None):
@@ -134,16 +136,18 @@ class DataBridgeQueue:
 			# Get next item
 			item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
 			if not item:
-
-				# Notify listeners
-				self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id, 'job': item } )
-
 				# Return empty
 				return None
 
+			# Get queue size
+			queueSize = self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) )
+
+			# Notify once when the queue is emptied
+			if queueSize == 0:
+				self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id } )				
+
 			# Notify listeners
-			self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item,
-				'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
+			self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item, 'size': queueSize } )
 
 			# Return item
 			return item
@@ -195,7 +199,7 @@ class DataBridgeQueue:
 					self.backend.set_remove( "%s/feats" % (self.queue,), slot_id )
 
 					# Notify listeners
-					self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id, 'job': item } )
+					self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id } )
 
 					# Get next offer
 					best = matcher.nextBestOffer()

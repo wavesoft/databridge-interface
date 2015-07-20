@@ -55,7 +55,5 @@ class UDPNotifier:
 
 		# Send message to all targets
 		for t in self.targets:
-
-			# Send message to target
 			self.sock.sendto(message, t)
 
