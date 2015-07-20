@@ -239,6 +239,11 @@ The constructor of DataBridge Queue.
 
 <table>
     <tr>
+        <th>Argument</th>
+        <th>Type</th>
+        <th>Description</th>
+    </tr>
+    <tr>
         <th>queueName</th>
         <td><code>str</code></td>
         <td>The name of the DataBridge Queue in operation.</td>
@@ -261,6 +266,11 @@ Push an job ID in the DataBridge-X queue.
 
 <table>
     <tr>
+        <th>Argument</th>
+        <th>Type</th>
+        <th>Description</th>
+    </tr>
+    <tr>
         <th>jobid</th>
         <td><code>str</code></td>
         <td>The job ID</td>
@@ -280,6 +290,11 @@ This function returns a string with the job ID pending in the queue, or `None` i
 
 <table>
     <tr>
+        <th>Argument</th>
+        <th>Type</th>
+        <th>Description</th>
+    </tr>
+    <tr>
         <th>feats</th>
         <td><code>dict</code></td>
         <td>A dictionary with the <em>offered</em> features the remote entity provides.</td>
@@ -295,6 +310,11 @@ This function offers a simple read/write interface to queue-specific persistent 
 If the argument `value` is missing this function will return the contents of the configuration parameter `param`. If the parameter is missing, this function will return `None`.
 
 <table>
+    <tr>
+        <th>Argument</th>
+        <th>Type</th>
+        <th>Description</th>
+    </tr>
     <tr>
         <th>param</th>
         <td><code>string</code></td>
