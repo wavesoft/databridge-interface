@@ -19,6 +19,18 @@
 
 from dbqueue.features import FeatureRequirement, FeatureOffer, FeatureMatcher, FeatureFactory
 
+"""
+MJDL Is a *very* simplistic Job-Description-Language (micro-JDL) specification
+that is used just for testing some of the features of DataBridge-X.
+
+In principle MJDL offers only matching in the following levels:
+
+ * `arch` 		: Architecture (None matches any architecture)
+ * `memory` 	: Minimum memory requirements (None removes this limitation)
+ * `priority` 	: The priority of this job. The higher, the more preferred.
+
+"""
+
 class MJDLRequirement(FeatureRequirement):
 	"""
 	An MJDL Requirement specification

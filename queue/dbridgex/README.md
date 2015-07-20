@@ -14,7 +14,7 @@ The DataBridge-X Queue is an elaborate FIFO queue that takes into account additi
 In the following examples you can see in practice how to use the `dbridgex` module:
 
 ```python
-from dbridgex import *
+from dbridgex import DataBridgeQueue, REDISStore, MJDLFactory
 
 # Create an instance of databridge queue
 queue = DataBridgeQueue(
@@ -38,8 +38,8 @@ queue.push( 'job-id-2' )
 job = queue.pop()
 ```
 
-However you can benefit from it's feature-matching
-if you specify an additional some feature specifications:
+However you can benefit from it's feature-matching internals
+if you specify an the feature specifications you require:
 
 ```python
 queue.push( 'job-id-for-x86', { "arch": "x86" } )
