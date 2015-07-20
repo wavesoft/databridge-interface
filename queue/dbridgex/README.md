@@ -15,11 +15,46 @@ DataBridge-X offers the means to send jobs only to a particular subset of volunt
 
 ### Real-Time Notifications
 
-DataBridge-X broadcasts real-time notifications to one or more target machines in order to gauge it's operation. This provides 
+DataBridge-X broadcasts real-time notifications to one or more target machines in order to gauge it's operation. This provides the means for responding in critical changes to the queue. 
 
-## Example
+## Usage
 
 In the following examples you can see in practice how to use the `dbridgex` module:
+
+```python
+from dbridgex import DataBridgeQueue, REDISStore
+
+# Create an instance of databridge queue
+queue = DataBridgeQueue(
+    "name-of-the-queue",    # The ID of this queue
+    REDISStore(             # The interface to the back-end key/value store
+        host="localhost",
+        port=6379,
+        db=0
+        )
+    )
+```
+
+The second parameter to the `DataBridgeQueue` constructor is an instance of a back-end key/value store interface, used for accessing the database. This is expected to be a subclass of `dbridgex.store.StoreBase`.
+
+`REDISStore` is a performant back-end that comes with with DataBridge-X. It uses REDIS for it's implementation.
+
+DataBridgeQueue behaves like a simple FIFO queue if no feature-matching is enabled. For example, you can enqueue and dequeue job IDs in the queue like this:
+
+```python
+queue.push( 'job-id-1' )
+queue.push( 'job-id-2' )
+...
+job = queue.pop()
+```
+
+If there are no more jobs in the queue `None` is returned.
+
+## Feature Matching
+
+You can benefit from more powerful features if you enable feature matching. To do so, you will need to specify which feature-matching algorithm to use. 
+
+DataBridge-X offers a reference implementation of a *Micro-Job Description Language* that matches some basic job/agent features. In order to use this, pass an instance of the `MJDLFactory` as a third parameter in the DataBridgeQueue constructor:
 
 ```python
 from dbridgex import DataBridgeQueue, REDISStore, MJDLFactory
@@ -36,31 +71,48 @@ queue = DataBridgeQueue(
     )
 ```
 
-DataBridgeQueue behaves like a simple FIFO queue
-if no feature-matching information are specified:
+Now you define a dictionary of features each job **requires** like this:
 
 ```python
-queue.push( 'job-id-1' )
-queue.push( 'job-id-2' )
-...
-job = queue.pop()
+queue.push( 'job-id-for-x86', { "platform": "Linux-i386" })
+queue.push( 'another-job-id-for-x86', { "platform": "Linux-i386" })
+queue.push( 'job-id-for-x64', { "platform": "Linux-x86_64" })
 ```
 
-However you can benefit from it's feature-matching internals
-if you specify the feature specifications you require:
+MJDL Also provides priorities. A job with a higher priority is preferred when the rest of the features match. Unless specified, job priority defaults to `0`. For example:
 
 ```python
-queue.push( 'job-id-for-x86', { "arch": "x86" } )
-queue.push( 'another-job-id-for-x86', { "arch": "x86" } )
-...
-job = queue.pop({ "arch": "x86_64" })
+queue.push( 'priority-job-id-for-x64', { "platform": "Linux-x86_64", "priority": 1 })
 ```
+
+When you pop a job, you can specify what features each entity **offers** like this:
+
+```python
+job = queue.pop({ "platform": "Linux-i386" })
+print job
+# Displays: 'job-id-for-x86'
+```
+
+As mentioned before, jobs with higher priority will be selected first:
+
+```python
+job = queue.pop({ "platform": "Linux-x86_64" })
+print job
+# Displays: 'priority-job-id-for-x64'
+job = queue.pop({ "platform": "Linux-x86_64" })
+print job
+# Displays: 'job-id-for-x64'
+```
+
+You can implement your own job matching logic by subclassing the four base classes found in the `dbridgex.features` module: `FeatureRequirement`, `FeatureOffer`, `FeatureMatcher` and `FeatureFactory`.
+
+The `FeatureFactory` is responsible for instancing the appropriate flavor of your classes. Check the `dbridgex.features.mjdl` for a reference implementation.
 
 ## Notifications
 
 You can broadcast notifications via UDP messages to one or more hosts by configuring the queue accordingly:
 
-```json
+```python
 # Configure the 'notify' property, specifying a list
 # of comma-separated hosts that will receive real-time
 # notifications from the queue operations:
