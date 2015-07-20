@@ -67,6 +67,18 @@ You can broadcast notifications via UDP messages to one or more hosts by configu
 queue.config("notify", "127.0.0.1:11223,192.168.1.1:11223")
 ```
 
+Each message is a JSON-Encoded object with the property `event` holding the name of the event. For example:
+
+```javascript
+{
+    // The property 'event' holds the name of the event
+    "event": "queue.miss",
+    // Everything else are additional parmeters
+    "queue": "name-of-the-queue",
+    ...
+}
+```
+
 The events broadcasted are the following:
 
 <table>
@@ -78,8 +90,9 @@ The events broadcasted are the following:
     <tr>
         <th><code>queue.enqueue</code></th>
         <td>
-            This event is triggered when an item is placed in a queue bucket.
-
+            <p>
+                This event is triggered when an item is placed in a queue bucket. The following parameters are also included:
+            </p>
             <table>
                 <tr>
                     <th>queue</th>
@@ -104,8 +117,9 @@ The events broadcasted are the following:
     <tr>
         <th><code>queue.dequeue</code></th>
         <td>
-            This event is triggered when an item is removed from a queue bucket.
-
+            <p>
+                This event is triggered when an item is removed from a queue bucket. The following parameters are also included:
+            </p>
             <table>
                 <tr>
                     <th>queue</th>
@@ -130,8 +144,9 @@ The events broadcasted are the following:
     <tr>
         <th><code>queue.empty</code></th>
         <td>
-            This event is triggered when a queue bucket is empty.
-
+            <p>
+                This event is triggered only once when a queue bucket is emptied. The following parameters are also included:
+            </p>
             <table>
                 <tr>
                     <th>queue</th>
@@ -148,8 +163,9 @@ The events broadcasted are the following:
     <tr>
         <th><code>queue.miss</code></th>
         <td>
-            This event is triggered when an entity tries to fetch an item from an empty queue.
-
+            <p>
+                This event is triggered when an entity tries to fetch an item from an empty queue. The following parameters are also included:
+            </p>
             <table>
                 <tr>
                     <th>queue</th>
