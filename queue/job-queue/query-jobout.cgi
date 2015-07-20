@@ -2,8 +2,6 @@
 import json
 from dirq.QueueSimple import QueueSimple
 
-message = None
-
 # Read message from disk
 message_directory = '/var/messages/jobsout'
 dirq = QueueSimple(message_directory)
