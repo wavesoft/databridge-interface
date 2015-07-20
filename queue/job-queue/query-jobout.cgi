@@ -9,6 +9,6 @@ message_directory = '/var/messages/jobsout'
 dirq = QueueSimple(message_directory)
 
 # Return queue details
-print "Content-Type: application/json"
+print "Content-Type: application/x-yaml"
 print
-print "size=%i" % dirq.count()
+print "size: %i" % dirq.count()
