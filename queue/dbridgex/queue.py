@@ -136,6 +136,10 @@ class DataBridgeQueue:
 			# Get next item
 			item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
 			if not item:
+
+				# Notify a queue miss
+				self.notifier.notify( "queue.miss", { 'queue': self.queue, 'slot': slot_id } )
+
 				# Return empty
 				return None
 
@@ -212,5 +216,8 @@ class DataBridgeQueue:
 				# We got an item, return
 				return item
 
-		# Return None in case something went wrong
+			# Notify a queue miss
+			self.notifier.notify( "queue.miss", { 'queue': self.queue, 'offer': f_offer.getDescription() } )
+
+		# Return None if we couldn't find anything
 		return None

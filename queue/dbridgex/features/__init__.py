@@ -55,6 +55,14 @@ class FeatureOffer:
 		"""
 		self.feats = feats
 
+	def getDescription(self):
+		"""
+		Return offer description (as a dictionary or as a string)
+		that is used by the notification targets to identify the
+		kind of offers that come from the clients.
+		"""
+		raise NotImplementedError("Command not implemented")
+
 class FeatureMatcher:
 	"""
 	A feature matching class

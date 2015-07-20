@@ -25,11 +25,18 @@ that is used just for testing some of the features of DataBridge-X.
 
 In principle MJDL offers only matching in the following levels:
 
- * `arch` 		: Architecture (None matches any architecture)
+ * `platform` 	: Platform (None matches any platform)
  * `memory` 	: Minimum memory requirements (None removes this limitation)
  * `priority` 	: The priority of this job. The higher, the more preferred.
 
 """
+
+def package_in_list(packageRequirement, packageOfferList):
+	"""
+	Check if a versioned package requirement is found
+	in the package offer list
+	"""
+	return packageRequirement in packageOfferList
 
 class MJDLRequirement(FeatureRequirement):
 	"""
@@ -42,8 +49,12 @@ class MJDLRequirement(FeatureRequirement):
 		"""
 
 		# Expose properties according to features received
-		self.arch = features.get("arch", None)
+		self.platform = features.get("platform", None)
 		self.memory = features.get("memory", None)
+		self.freeMemory = features.get("freeMemory", None)
+		self.swap = features.get("swap", None)
+		self.freeSwap = features.get("freeSwap", None)
+		self.packages = features.get("packages", None)
 
 		# Priority is a dimention only used by the matcher
 		self.priority = features.get("priority", 0)
@@ -53,23 +64,20 @@ class MJDLRequirement(FeatureRequirement):
 		Calculate a unique ID with the offer specifications that we have
 		"""
 
+		# Stringify packages
+		pkgs_str = ""
+		if self.packages:
+			pkgs_str = "".join(self.packages)
+
 		# Prefix with 'mjdl'
-		nid = "mjdl"
-
-		# Index by arch
-		if self.arch is None:
-			nid += ":"
-		else:
-			nid += ":"+str(self.arch)
-
-		# Then memory
-		if self.memory is None:
-			nid += ":"
-		else:
-			nid += ":"+str(self.memory)
-
-		# Then priority
-		nid += ":"+str(self.priority)
+		nid = "mjdl" + \
+			":%s" % str(self.platform) + \
+			":%s" % str(self.memory) + \
+			":%s" % str(self.freeMemory) + \
+			":%s" % str(self.swap) + \
+			":%s" % str(self.freeSwap) + \
+			":%s" % pkgs_str + \
+			":%s" % str(self.priority)
 
 		# Return index
 		return nid
@@ -86,9 +94,29 @@ class MJDLOffer(FeatureOffer):
 		"""
 
 		# Expose properties according to features received
-		self.arch = features.get("arch", None)
-		self.memory = features.get("memory", 0)
+		self.platform = features.get("platform", None)
+		self.memory = features.get("memory", None)
+		self.freeMemory = features.get("freeMemory", None)
+		self.swap = features.get("swap", None)
+		self.freeSwap = features.get("freeSwap", None)
+		self.packages = features.get("packages", None)
 
+	def getDescription(self):
+		"""
+		Return offer description (as a dictionary or as a string)
+		that is used by the notification targets to identify the
+		kind of offers that come from the clients.
+		"""
+
+		return {
+			"matcher": "mjdl",
+			"platform": self.platform,
+			"memory": self.memory,
+			"freeMemory": self.freeMemory,
+			"swap": self.swap,
+			"freeSwap": self.freeSwap,
+			"packages": self.packages,
+		}
 
 class MJDLMatcher(FeatureMatcher):
 	"""
@@ -107,13 +135,29 @@ class MJDLMatcher(FeatureMatcher):
 		Add a requirement to the process
 		"""
 
-		# Check if architecture requirement is met
-		if not (req.arch is None) and (req.arch != self.offer.arch):
+		# Check if exact parameters met
+		if not (req.platform is None) and (req.platform != self.offer.platform):
 			return
 
-		# Check if minimum meory requirements is met
+		# Check if minimum parameters are met
 		if not (req.memory is None) and (int(self.offer.memory) < int(req.memory)):
 			return
+		if not (req.freeMemory is None) and (int(self.offer.freeMemory) < int(req.freeMemory)):
+			return
+		if not (req.swap is None) and (int(self.offer.swap) < int(req.swap)):
+			return
+		if not (req.freeSwap is None) and (int(self.offer.freeSwap) < int(req.freeSwap)):
+			return
+
+		# Check if all packages are in there
+		if not (req.packages is None):
+			# Require 'packages' in the offer
+			if not self.offer.packages:
+				return
+			# If at least one package from offer fails, return
+			for pkg in req.packages:
+				if not package_in_list(pkg, self.offer.packages):
+					return
 
 		# Store item in list and sort by priority
 		self.matchedRequirements.append( req )

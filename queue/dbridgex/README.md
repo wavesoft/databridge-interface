@@ -39,7 +39,7 @@ job = queue.pop()
 ```
 
 However you can benefit from it's feature-matching internals
-if you specify an the feature specifications you require:
+if you specify the feature specifications you require:
 
 ```python
 queue.push( 'job-id-for-x86', { "arch": "x86" } )
