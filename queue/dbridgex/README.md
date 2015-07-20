@@ -7,15 +7,11 @@ DataBridge-X Queue is an implementation of DataBridge that takes into account ad
 
 ## Description
 
-The DataBridge-X Queue is an elaborate FIFO queue that takes into account additional requirements that some experiments might need. The following sections explain in details the new features.
+The DataBridge-X Queue is an elaborate FIFO queue that takes into account additional requirements that some experiments might need:
 
-### Feature Matching
-
-DataBridge-X offers the means to send jobs only to a particular subset of volunteers that fulfill a set of requirements. Such a feature is useful when more than one projects or project versions are using the same queue.
-
-### Real-Time Notifications
-
-DataBridge-X broadcasts real-time notifications to one or more target machines in order to gauge it's operation. This provides the means for responding in critical changes to the queue. 
+ * __Modular Storage Back-End:__ DataBridge-X provides a modular abstracting to the storage element used for keeping the queue data. In principle any key/value store can be used.
+ * __Feature Matching:__ DataBridge-X offers the means to send jobs only to a particular subset of volunteers that fulfill a set of requirements. Such a feature is useful when more than one projects or project versions are using the same queue.
+ * __Real-Time Notifications:__ DataBridge-X broadcasts real-time notifications to one or more target machines in order to gauge it's operation. This provides the means for responding in critical changes to the queue. 
 
 ## Usage
 
@@ -50,7 +46,7 @@ job = queue.pop()
 
 If there are no more jobs in the queue `None` is returned.
 
-## Feature Matching
+### Feature Matching
 
 You can benefit from more powerful features if you enable feature matching. To do so, you will need to specify which feature-matching algorithm to use. 
 
@@ -108,7 +104,7 @@ You can implement your own job matching logic by subclassing the four base class
 
 The `FeatureFactory` is responsible for instancing the appropriate flavor of your classes. Check the `dbridgex.features.mjdl` for a reference implementation.
 
-## Notifications
+### Notifications
 
 You can broadcast notifications via UDP messages to one or more hosts by configuring the queue accordingly:
 
@@ -233,4 +229,85 @@ The events broadcasted are the following:
 
 </table>
 
+## API Reference
+
+The following methods are exposed by the `DataBridgeQueue` class:
+
+### DataBridgeQueue( `queueName`, `storeBackend`, `featureFactory=None` )
+
+The constructor of DataBridge Queue. 
+
+<table>
+    <tr>
+        <th>queueName</th>
+        <td><code>str</code></td>
+        <td>The name of the DataBridge Queue in operation.</td>
+    </tr>
+    <tr>
+        <th>storeBackend</th>
+        <td><code>dbridgex.store.StoreBase</code></td>
+        <td>An instance of <code>dbridgex.store.StoreBase</code> that will be used for accessing the storage element.</td>
+    </tr>
+    <tr>
+        <th>featureFactory</th>
+        <td><code>dbridgex.features.FeatureFactory</code></td>
+        <td>An instance of <code>dbridgex.features.FeatureFactory</code> that will be used for constructing the appropriate feature-matching classes.</td>
+    </tr>
+</table>
+
+### push( `jobid`, `feats=None` )
+
+Push an job ID in the DataBridge-X queue.
+
+<table>
+    <tr>
+        <th>jobid</th>
+        <td><code>str</code></td>
+        <td>The job ID</td>
+    </tr>
+    <tr>
+        <th>feats</th>
+        <td><code>dict</code></td>
+        <td>A dictionary with the <em>required</em> features this job needs in order to run.</td>
+    </tr>
+</table>
+
+### pop( `feats=None` )
+
+Fetch the next job ID from the DataBridge-X queue.
+
+This function returns a string with the job ID pending in the queue, or `None` if there are no elements left.
+
+<table>
+    <tr>
+        <th>feats</th>
+        <td><code>dict</code></td>
+        <td>A dictionary with the <em>offered</em> features the remote entity provides.</td>
+    </tr>
+</table>
+
+### config( `parm`, `value=None` )
+
+Get or Set a persistent configuration parameter.
+
+This function offers a simple read/write interface to queue-specific persistent parameters. These parameters are kept in the storage back-end.
+
+If the argument `value` is missing this function will return the contents of the configuration parameter `param`. If the parameter is missing, this function will return `None`.
+
+<table>
+    <tr>
+        <th>param</th>
+        <td><code>string</code></td>
+        <td>The name of the configuration parameter to access.</td>
+    </tr>
+    <tr>
+        <th>value</th>
+        <td><code>string</code></td>
+        <td>The value to store in the configuration parameter. If this argument is missing, the contents of the configuration parameter is returned.</td>
+    </tr>
+</table>
+
+## License
+
+This project is released under the GNU GPL v2 license:
 
