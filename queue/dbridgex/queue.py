@@ -20,8 +20,9 @@
 import json
 import cPickle as pickle
 
-from dbqueue.features import FeatureOffer, FeatureRequirement, FeatureMatcher, FeatureFormatError
-from dbqueue.errors import QueueError
+from dbridgex.features import FeatureOffer, FeatureRequirement, FeatureMatcher, FeatureFormatError
+from dbridgex.errors import QueueError
+from dbridgex.notifier import UDPNotifier
 
 class DataBridgeQueue:
 	"""
@@ -39,26 +40,48 @@ class DataBridgeQueue:
 		self.featureFactory = featureFactory
 
 		# Load persistent configuration
-		self.config = storeBackend.get("config")
-		if not self.config:
-			self.config = {}
+		self._config = storeBackend.get( "%s/config" % self.queue )
+		if not self._config:
+			self._config = {}
 		else:
-			self.config = json.loads(self.config)
+			self._config = json.loads(self._config)
+
+		# Initialize notifier
+		self.notifier = UDPNotifier()
+
+		# Apply configuration
+		self.applyConfig()
+
+	def applyConfig(self):
+		"""
+		Apply configuration changes
+		"""
+
+		# Apply 'notify' changes
+		if 'notify' in self._config:
+			self.notifier.removeAllTargets()
+
+			# Split on comma and include targets
+			for machine in self._config['notify'].split(","):
+				self.notifier.addTarget( machine )
 
 	def config(self, parm, value=None):
 		"""
-		Set or Get a persistent configuration parameter
+		Get or Set a persistent configuration parameter
 		"""
 
 		# If value is not specified, return property
 		if value is None:
-			if not parm in self.config:
+			if not parm in self._config:
 				return None
-			return self.config[parm]
+			return self._config[parm]
 
 		# Update configuration property
-		self.config[parm] = value
-		self.backend.set("config", json.dumps(self.config))
+		self._config[parm] = value
+		self.backend.set( "%s/config" % self.queue, json.dumps(self._config) )
+
+		# Apply configuration changes
+		self.applyConfig()
 
 	def push(self, jobid, feats=None):
 		"""
@@ -67,7 +90,7 @@ class DataBridgeQueue:
 		"""
 
 		# Default queue id
-		qid = "default"
+		slot_id = "default"
 
 		# If we have job feature specifications handle them now
 		if (not feats is None) and (not self.featureFactory is None):
@@ -78,19 +101,23 @@ class DataBridgeQueue:
 			except FeatureFormatError as e:
 				raise QueueError("Could not add item on queue: %s" % str(e))
 
-			# Get the feature domain, effectively meaning a unique string
-			# that identifies the specified category
-			qid = f_req.getID()
+			# Get the feature ID that will be used to identify the feature and
+			# the appropriate job slot where the job is eventually going to be placed
+			slot_id = f_req.getID()
 
 			# Store feature requirement in the store
-			self.backend.set( "%s/feats/%s" % (self.queue, qid), pickle.dumps(f_req) )
+			self.backend.set( "%s/feats/%s" % (self.queue, slot_id), pickle.dumps(f_req) )
 
 			# Update the set of features
-			self.backend.set_add( "%s/feats" % (self.queue,), qid )
+			self.backend.set_add( "%s/feats" % (self.queue,), slot_id )
 
 		# According to feature priority add
 		# in the head or in the tail of the queue
-		self.backend.list_push( "%s/queue/%s" % (self.queue, qid), jobid )
+		self.backend.list_push( "%s/slot/%s" % (self.queue, slot_id), jobid )
+
+		# Notify listeners
+		self.notifier.notify( "queue.enqueue", { 'queue': self.queue, 'slot': slot_id, 'job': jobid,
+			'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
 
 	def pop(self, feats=None):
 		"""
@@ -99,15 +126,24 @@ class DataBridgeQueue:
 		"""
 
 		# Default queue id
-		qid = "default"
+		slot_id = "default"
 
 		# If we don't have feature specifications just get next item from default
 		if (feats is None) or (self.featureFactory is None):
 
 			# Get next item
-			item = self.backend.list_pop( "%s/queue/%s" % (self.queue, qid) )
+			item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
 			if not item:
+
+				# Notify listeners
+				self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id, 'job': item } )
+
+				# Return empty
 				return None
+
+			# Notify listeners
+			self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item,
+				'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
 
 			# Return item
 			return item
@@ -129,11 +165,11 @@ class DataBridgeQueue:
 			if feat_ids:
 
 				# Iterate over all the registered feature requests				
-				for qid in feat_ids:
+				for slot_id in feat_ids:
 
 					# Load FeatureRequirement object from store
 					try:
-						f_req = pickle.loads( self.backend.get( "%s/feats/%s" % (self.queue, qid) ) )
+						f_req = pickle.loads( self.backend.get( "%s/feats/%s" % (self.queue, slot_id) ) )
 					except pickle.UnpicklingError:
 						# Skip this problematic feature
 						continue
@@ -147,20 +183,30 @@ class DataBridgeQueue:
 			while best:
 
 				# Get matcher ID
-				qid = best.getID()
+				slot_id = best.getID()
 
 				# Get next item
-				item = self.backend.list_pop( "%s/queue/%s" % (self.queue, qid) )
+				item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
 				if not item:
 
 					# If there are no items, cleanup feature specifications
 					# and ask for next best offer
-					self.backend.remove( "%s/feats/%s" % (self.queue, qid) )
-					self.backend.set_remove( "%s/feats" % (self.queue,), qid )
+					self.backend.remove( "%s/feats/%s" % (self.queue, slot_id) )
+					self.backend.set_remove( "%s/feats" % (self.queue,), slot_id )
+
+					# Notify listeners
+					self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id, 'job': item } )
 
 					# Get next offer
 					best = matcher.nextBestOffer()
 					continue
 
+				# Notify listeners
+				self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item,
+					'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
+
 				# We got an item, return
 				return item
+
+		# Return None in case something went wrong
+		return None

@@ -56,6 +56,12 @@ class StoreBase:
 		"""
 		raise NotImplementedError("Command not implemented")
 
+	def list_size(self, key):
+		"""
+		Return the number of elements in the list
+		"""
+		raise NotImplementedError("Command not implemented")
+
 	def set_add(self, key, value):
 		"""
 		Add an item in a set of unique items

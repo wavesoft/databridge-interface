@@ -17,7 +17,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
-from dbqueue.features import FeatureRequirement, FeatureOffer, FeatureMatcher, FeatureFactory
+from dbridgex.features import FeatureRequirement, FeatureOffer, FeatureMatcher, FeatureFactory
 
 """
 MJDL Is a *very* simplistic Job-Description-Language (micro-JDL) specification

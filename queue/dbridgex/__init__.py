@@ -18,9 +18,9 @@
 #
 
 # Import DataBridge Queue
-from dbqueue.queue import DataBridgeQueue
-from dbqueue.errors import QueueError
+from dbridgex.queue import DataBridgeQueue
+from dbridgex.errors import QueueError
 
 # Import Default Implementation
-from dbqueue.store.redis import REDISStore
-from dbqueue.features.mjdl import MJDLFactory
+from dbridgex.store.redis import REDISStore
+from dbridgex.features.mjdl import MJDLFactory

@@ -20,7 +20,7 @@
 from __future__ import absolute_import
 
 import redis
-from dbqueue.store import StoreBase
+from dbridgex.store import StoreBase
 
 class REDISStore(StoreBase):
 	"""
@@ -99,3 +99,9 @@ class REDISStore(StoreBase):
 		Pop a value from the FIFO list under the specified key
 		"""
 		return self.redis.lpop(self.prefix+key)
+
+	def list_size(self, key):
+		"""
+		Return the number of elements in the list
+		"""
+		return self.redis.llen(self.prefix+key)
