@@ -91,8 +91,8 @@ class DataBridgeQueue:
 		additional run-time specifications such as JDL
 		"""
 
-		# Default queue id
-		slot_id = "default"
+		# Default queue bucket
+		bucket_id = "default"
 
 		# If we have job feature specifications handle them now
 		if (not feats is None) and (not self.featureFactory is None):
@@ -104,22 +104,22 @@ class DataBridgeQueue:
 				raise QueueError("Could not add item on queue: %s" % str(e))
 
 			# Get the feature ID that will be used to identify the feature and
-			# the appropriate job slot where the job is eventually going to be placed
-			slot_id = f_req.getID()
+			# the appropriate job bucket where the job is eventually going to be placed
+			bucket_id = f_req.getID()
 
 			# Store feature requirement in the store
-			self.backend.set( "%s/feats/%s" % (self.queue, slot_id), pickle.dumps(f_req) )
+			self.backend.set( "%s/feats/%s" % (self.queue, bucket_id), pickle.dumps(f_req) )
 
 			# Update the set of features
-			self.backend.set_add( "%s/feats" % (self.queue,), slot_id )
+			self.backend.set_add( "%s/feats" % (self.queue,), bucket_id )
 
 		# According to feature priority add
 		# in the head or in the tail of the queue
-		self.backend.list_push( "%s/slot/%s" % (self.queue, slot_id), jobid )
+		self.backend.list_push( "%s/bucket/%s" % (self.queue, bucket_id), jobid )
 
 		# Notify listeners
-		self.notifier.notify( "queue.enqueue", { 'queue': self.queue, 'slot': slot_id, 'job': jobid,
-			'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
+		self.notifier.notify( "queue.enqueue", { 'queue': self.queue, 'bucket': bucket_id, 'job': jobid,
+			'size': self.backend.list_size( "%s/bucket/%s" % (self.queue, bucket_id) ) } )
 
 	def pop(self, feats=None):
 		"""
@@ -127,31 +127,31 @@ class DataBridgeQueue:
 		by the worker node.
 		"""
 
-		# Default queue id
-		slot_id = "default"
+		# Default queue bucket
+		bucket_id = "default"
 
 		# If we don't have feature specifications just get next item from default
 		if (feats is None) or (self.featureFactory is None):
 
 			# Get next item
-			item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
+			item = self.backend.list_pop( "%s/bucket/%s" % (self.queue, bucket_id) )
 			if not item:
 
 				# Notify a queue miss
-				self.notifier.notify( "queue.miss", { 'queue': self.queue, 'slot': slot_id } )
+				self.notifier.notify( "queue.miss", { 'queue': self.queue } )
 
 				# Return empty
 				return None
 
 			# Get queue size
-			queueSize = self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) )
+			queueSize = self.backend.list_size( "%s/bucket/%s" % (self.queue, bucket_id) )
 
 			# Notify once when the queue is emptied
 			if queueSize == 0:
-				self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id } )				
+				self.notifier.notify( "queue.empty", { 'queue': self.queue, 'bucket': bucket_id } )				
 
 			# Notify listeners
-			self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item, 'size': queueSize } )
+			self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'bucket': bucket_id, 'job': item, 'size': queueSize } )
 
 			# Return item
 			return item
@@ -173,11 +173,11 @@ class DataBridgeQueue:
 			if feat_ids:
 
 				# Iterate over all the registered feature requests				
-				for slot_id in feat_ids:
+				for bucket_id in feat_ids:
 
 					# Load FeatureRequirement object from store
 					try:
-						f_req = pickle.loads( self.backend.get( "%s/feats/%s" % (self.queue, slot_id) ) )
+						f_req = pickle.loads( self.backend.get( "%s/feats/%s" % (self.queue, bucket_id) ) )
 					except pickle.UnpicklingError:
 						# Skip this problematic feature
 						continue
@@ -191,27 +191,27 @@ class DataBridgeQueue:
 			while best:
 
 				# Get matcher ID
-				slot_id = best.getID()
+				bucket_id = best.getID()
 
 				# Get next item
-				item = self.backend.list_pop( "%s/slot/%s" % (self.queue, slot_id) )
+				item = self.backend.list_pop( "%s/bucket/%s" % (self.queue, bucket_id) )
 				if not item:
 
 					# If there are no items, cleanup feature specifications
 					# and ask for next best offer
-					self.backend.remove( "%s/feats/%s" % (self.queue, slot_id) )
-					self.backend.set_remove( "%s/feats" % (self.queue,), slot_id )
+					self.backend.remove( "%s/feats/%s" % (self.queue, bucket_id) )
+					self.backend.set_remove( "%s/feats" % (self.queue,), bucket_id )
 
 					# Notify listeners
-					self.notifier.notify( "queue.empty", { 'queue': self.queue, 'slot': slot_id } )
+					self.notifier.notify( "queue.empty", { 'queue': self.queue, 'bucket': bucket_id } )
 
 					# Get next offer
 					best = matcher.nextBestOffer()
 					continue
 
 				# Notify listeners
-				self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'slot': slot_id, 'job': item,
-					'size': self.backend.list_size( "%s/slot/%s" % (self.queue, slot_id) ) } )
+				self.notifier.notify( "queue.dequeue", { 'queue': self.queue, 'bucket': bucket_id, 'job': item,
+					'size': self.backend.list_size( "%s/bucket/%s" % (self.queue, bucket_id) ) } )
 
 				# We got an item, return
 				return item

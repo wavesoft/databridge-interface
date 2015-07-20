@@ -7,7 +7,15 @@ DataBridge-X Queue is an implementation of DataBridge that takes into account ad
 
 ## Description
 
-The DataBridge-X Queue is an elaborate FIFO queue that takes into account additional requirements that some experiments might need.
+The DataBridge-X Queue is an elaborate FIFO queue that takes into account additional requirements that some experiments might need. The following sections explain in details the new features.
+
+### Feature Matching
+
+DataBridge-X offers the means to send jobs only to a particular subset of volunteers that fulfill a set of requirements. Such a feature is useful when more than one projects or project versions are using the same queue.
+
+### Real-Time Notifications
+
+DataBridge-X broadcasts real-time notifications to one or more target machines in order to gauge it's operation. This provides 
 
 ## Example
 
@@ -47,3 +55,114 @@ queue.push( 'another-job-id-for-x86', { "arch": "x86" } )
 ...
 job = queue.pop({ "arch": "x86_64" })
 ```
+
+## Notifications
+
+You can broadcast notifications via UDP messages to one or more hosts by configuring the queue accordingly:
+
+```json
+# Configure the 'notify' property, specifying a list
+# of comma-separated hosts that will receive real-time
+# notifications from the queue operations:
+queue.config("notify", "127.0.0.1:11223,192.168.1.1:11223")
+```
+
+The events broadcasted are the following:
+
+<table>
+    <tr>
+        <th>Name</th>
+        <th>Description/th>
+    </tr>
+
+    <tr>
+        <th><code>queue.enqueue</code></th>
+        <td>
+            This event is triggered when an item is placed in a queue bucket.
+
+            <table>
+                <tr>
+                    <th>queue</th>
+                    <td>The name of the DataBridge Queue in operation.</td>
+                </tr>
+                <tr>
+                    <th>bucket</th>
+                    <td>The ID of the bucket the job was placed.</td>
+                </tr>
+                <tr>
+                    <th>job</th>
+                    <td>The ID of the job.</td>
+                </tr>
+                <tr>
+                    <th>size</th>
+                    <td>The size of the bucket after the item was enqueued.</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <th><code>queue.dequeue</code></th>
+        <td>
+            This event is triggered when an item is removed from a queue bucket.
+
+            <table>
+                <tr>
+                    <th>queue</th>
+                    <td>The name of the DataBridge Queue in operation.</td>
+                </tr>
+                <tr>
+                    <th>bucket</th>
+                    <td>The ID of the bucket the job was placed.</td>
+                </tr>
+                <tr>
+                    <th>job</th>
+                    <td>The ID of the job.</td>
+                </tr>
+                <tr>
+                    <th>size</th>
+                    <td>The size of the bucket after the item was dequeued.</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <th><code>queue.empty</code></th>
+        <td>
+            This event is triggered when a queue bucket is empty.
+
+            <table>
+                <tr>
+                    <th>queue</th>
+                    <td>The name of the DataBridge Queue in operation.</td>
+                </tr>
+                <tr>
+                    <th>bucket</th>
+                    <td>The ID of the bucket the job was placed.</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+    <tr>
+        <th><code>queue.miss</code></th>
+        <td>
+            This event is triggered when an entity tries to fetch an item from an empty queue.
+
+            <table>
+                <tr>
+                    <th>queue</th>
+                    <td>The name of the DataBridge Queue in operation.</td>
+                </tr>
+                <tr>
+                    <th>(offer)</th>
+                    <td>When feature matching is enabled, this parameter contains the description of the features the entity offered. This is useful in order to identify the environment and push appropriate type of jobs.</td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+</table>
+
+
