@@ -132,7 +132,7 @@ The events broadcasted are the following:
 <table>
     <tr>
         <th>Name</th>
-        <th>Description/th>
+        <th>Description</th>
     </tr>
 
     <tr>

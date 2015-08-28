@@ -19,7 +19,7 @@
 #
 
 # Base directory for the DataBridge
-DB_URL="https://t4t-data-bridge.cern.ch"
+DB_DOMAIN="t4t-data-bridge.cern.ch"
 
 # We will need the BOINC UserID and BOINC Authenticator as the first two parameters
 AUTH_USER="$1"
@@ -27,7 +27,7 @@ AUTH_PASSWORD="$2"
 shift; shift;
 [ -z "$AUTH_USER" ] && echo "ERROR: Please specify the authentication username!" && exit 2
 [ -z "$AUTH_PASSWORD" ] && echo "ERROR: Please specify the authentication password!" && exit 2
-[ ! -z "$1" ] && DB_URL="$1" && shift
+[ ! -z "$1" ] && DB_DOMAIN="$1" && shift
 
 # Handle other command-line arguments
 LOG_LEVEL=1
@@ -44,10 +44,10 @@ for I in $@; do
 done
 
 # Define URLs using base URL as reference
-DB_INPUT_QUEUE="${DB_URL}/boinc-client/get-job.cgi"
-DB_OUTPUT_QUEUE="${DB_URL}/boinc-client/put-jobout.cgi"
-DB_INPUT_URL="${DB_URL}/myfed/t4t-boinc/input"
-DB_OUTPUT_URL="${DB_URL}/myfed/t4t-boinc/output"
+DB_INPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/get-job.cgi"
+DB_OUTPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/put-jobout.cgi"
+DB_INPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/input"
+DB_OUTPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/output"
 
 # Black Hole Protection: Minimum time required by a job (5 min)
 BHP_MIN_JOB_TIME=300
