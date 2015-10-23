@@ -18,6 +18,8 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 #
 
+###############################################
+
 # Base directory for the DataBridge
 DB_DOMAIN="t4t-data-bridge.cern.ch"
 
@@ -28,6 +30,43 @@ shift; shift;
 [ -z "$AUTH_USER" ] && echo "ERROR: Please specify the authentication username!" && exit 2
 [ -z "$AUTH_PASSWORD" ] && echo "ERROR: Please specify the authentication password!" && exit 2
 [ ! -z "$1" ] && DB_DOMAIN="$1" && shift
+
+# ------------------------
+#  Databridge URLs
+# ------------------------
+
+# Define URLs using base URL as reference
+DB_INPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/get-job.cgi"
+DB_OUTPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/put-jobout.cgi"
+DB_INPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/input"
+DB_OUTPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/output"
+
+# ------------------------
+#  Black Hole Protection
+# ------------------------
+
+# Black Hole Protection: Minimum time required by a job (5 min)
+BHP_MIN_JOB_TIME=300
+# Black Hole Protection: Upper limit to reach when delaying next job
+# request before declaring the job unprocessable.
+BHP_MAX_DELAY=3600
+# Black Hole Protection: The initial delay between consecutive job requests
+BHP_INITIAL_DELAY=10
+
+# --------------------------
+#  CURL & DAVIX I/O Retries
+# --------------------------
+
+# How many times to re-try an I/O Command
+IO_RETRIES=60
+
+# How long to wait between I/O Retries
+IO_RETRY_DELAY=60
+
+###############################################
+
+# DumbQ Metrics binary
+DUMBQ_METRICS_BIN=$(which dumbq-metrics)
 
 # Handle other command-line arguments
 LOG_LEVEL=1
@@ -42,23 +81,6 @@ for I in $@; do
             ;;
     esac
 done
-
-# Define URLs using base URL as reference
-DB_INPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/get-job.cgi"
-DB_OUTPUT_QUEUE="https://${DB_DOMAIN}/boinc-client/put-jobout.cgi"
-DB_INPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/input"
-DB_OUTPUT_URL="davs://${DB_DOMAIN}/myfed/t4t-boinc/output"
-
-# Black Hole Protection: Minimum time required by a job (5 min)
-BHP_MIN_JOB_TIME=300
-# Black Hole Protection: Upper limit to reach when delaying next job
-# request before declaring the job unprocessable.
-BHP_MAX_DELAY=3600
-# Black Hole Protection: The initial delay between consecutive job requests
-BHP_INITIAL_DELAY=10
-
-# DumbQ Metrics binary
-DUMBQ_METRICS_BIN=$(which dumbq-metrics)
 
 # Log helper
 function log {
@@ -92,7 +114,7 @@ function davix_io {
     local FILE=$3
     local RET=256
     local ERROR_MSG=""
-    local RETRIES=3
+    local RETRIES=${IO_RETRIES}
     shift; shift; shift
 
     # Extra args
@@ -142,8 +164,8 @@ function davix_io {
         if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
             let RETRIES--
             log 3 "$ERROR_MSG"
-            log 1 "In 10 sec will retry a DAVIX ${VERB} to ${URL}"
-            sleep 10
+            log 1 "In ${IO_RETRY_DELAY} sec will retry a DAVIX ${VERB} to ${URL}"
+            sleep ${IO_RETRY_DELAY}
         else
             break
         fi
@@ -168,7 +190,7 @@ function curl_io {
 
     # Extra args
     local CMDLINE="curl -k -u \"${AUTH_USER}:${AUTH_PASSWORD}\""
-    CMDLINE="${CMDLINE} -f -s -S -L --retry 3 --retry-delay 10 -X ${VERB}"
+    CMDLINE="${CMDLINE} -f -s -S -L --retry ${IO_RETRIES} --retry-delay ${IO_RETRY_DELAY} -X ${VERB}"
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
@@ -197,6 +219,7 @@ function curl_io {
 function get_jobfile {
     local JOBDIR=$1
     local NEXT_JOB_ID=""
+    local TRIES=0
 
     # Get a job ID from the queue
     NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
@@ -210,6 +233,9 @@ function get_jobfile {
         log 2 "The job description got from the input queue is empty!"
         return 1
     fi
+
+    # Retry multiple times to download job from queue
+    while [ $TRIES ]
 
     # Download job file
     local JOB_FILE="${JOBDIR}/job.sh"
