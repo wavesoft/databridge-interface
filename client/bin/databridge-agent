@@ -219,7 +219,6 @@ function curl_io {
 function get_jobfile {
     local JOBDIR=$1
     local NEXT_JOB_ID=""
-    local TRIES=0
 
     # Get a job ID from the queue
     NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
@@ -233,9 +232,6 @@ function get_jobfile {
         log 2 "The job description got from the input queue is empty!"
         return 1
     fi
-
-    # Retry multiple times to download job from queue
-    while [ $TRIES ]
 
     # Download job file
     local JOB_FILE="${JOBDIR}/job.sh"
