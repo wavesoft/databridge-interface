@@ -215,10 +215,19 @@ function curl_io {
 
         # If this was an error, retry
         if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
+
+            # Check if that's actually a 404 error
+            if [[ $ERROR_MSG == *"404"* ]]; then
+                log 1 "The queue is empty, will retry later"
+                return $RET
+            fi
+
+            # Otherwise retry
             let RETRIES--
             log 3 "$ERROR_MSG"
             log 1 "In ${IO_RETRY_DELAY} sec will retry a CURL ${VERB} to ${URL}"
             sleep ${IO_RETRY_DELAY}
+
         else
             break
         fi
