@@ -67,6 +67,7 @@ IO_RETRY_DELAY=30
 
 # DumbQ Metrics binary
 DUMBQ_METRICS_BIN=$(which dumbq-metrics)
+DUMBQ_LOGERROR_BIN=$(which dumbq-logerror)
 
 # Handle other command-line arguments
 LOG_LEVEL=1
@@ -103,7 +104,15 @@ function log {
 
     # Process multiline buffers
     while read L; do
+
+        # Log error
         echo "[$(date '+%d/%m/%Y %H:%M:%S')] ${LEVEL_STR}: $L" 1>&2
+
+        # Warnings and errors are also logged in dumbq
+        if [[ ! -z "$DUMBQ_LOGERROR_BIN" && $LEVEL -ge 2 ]]; then
+            ${DUMBQ_LOGERROR_BIN} --level $LEVEL "$L"
+        fi
+
     done <<< "$*"
 }
 
