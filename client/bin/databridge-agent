@@ -218,7 +218,9 @@ function curl_io {
         if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
 
             # Check if that's actually a 404 error
-            if [[ $ERROR_MSG == *"404"* ]]; then
+            if [[ $ERROR_MSG == *"401"* ]]; then
+                return 241
+            elif [[ $ERROR_MSG == *"404"* ]]; then
                 return 244
             fi
 
@@ -251,6 +253,9 @@ function get_jobfile {
     # Check for 404 error
     if [ $RET -eq 244 ]; then
         log 2 "There are no more jobs in the queue"
+        return 1
+    elif [ $RET -eq 241 ]; then
+        log 3 "The server denied our credentials"
         return 1
     elif [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
@@ -318,6 +323,9 @@ function upload_jobdir {
     if [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
         return 255
+    elif [ $RET -eq 241 ]; then
+        log 3 "The server denied our credentials"
+        return 1
     elif [ $RET -ne 0 ]; then
         log 3 "Unable to upload job description to ${DB_OUTPUT_QUEUE}"
         return 1
@@ -363,7 +371,7 @@ while true; do
 
         # Exit on critical errors
         if [ $RET -eq 255 ]; then
-            log 3 "A critical error occured, requesting reboot!"
+            log 3 "Unrecoverable error occured, will exit"
             exit 3
         elif [ $RET -ne 0 ]; then
             log 1 "Sleeping for 1 minute"
@@ -394,7 +402,7 @@ while true; do
     log 1 "Uploading results"
     upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
     if [ $? -eq 255 ]; then
-        log 3 "A critical error occured, requesting reboot!"
+        log 3 "Unrecoverable error occured, will exit"
         exit 3
     fi
 
@@ -422,7 +430,7 @@ while true; do
         let BHP_TIMER*=2
         # If we have exceeded BHP_MAX_DELAY, abort!
         if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
-            log 3 "Exceeded BHP max timer, requesting reboot!"
+            log 3 "It looks like we are consuming too many jobs, will exit"
             reboot
             exit 3
         fi
