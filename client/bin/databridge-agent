@@ -255,7 +255,10 @@ function get_jobfile {
         log 2 "There are no more jobs in the queue"
         return 1
     elif [ $RET -eq 241 ]; then
-        log 3 "The server denied our credentials"
+        log 3 "The server refused our credentials"
+        return 1
+    elif [ $RET -eq 22 ]; then
+        log 3 "A server error occured"
         return 1
     elif [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
@@ -324,7 +327,10 @@ function upload_jobdir {
         log 3 "Giving up on contacting server"
         return 255
     elif [ $RET -eq 241 ]; then
-        log 3 "The server denied our credentials"
+        log 3 "The server refused our credentials"
+        return 1
+    elif [ $RET -eq 22 ]; then
+        log 3 "A server error occured"
         return 1
     elif [ $RET -ne 0 ]; then
         log 3 "Unable to upload job description to ${DB_OUTPUT_QUEUE}"
