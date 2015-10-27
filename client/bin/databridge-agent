@@ -58,10 +58,10 @@ BHP_INITIAL_DELAY=10
 # --------------------------
 
 # How many times to re-try an I/O Command
-IO_RETRIES=60
+IO_RETRIES=10
 
 # How long to wait between I/O Retries
-IO_RETRY_DELAY=60
+IO_RETRY_DELAY=30
 
 ###############################################
 
