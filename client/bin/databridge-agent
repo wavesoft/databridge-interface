@@ -167,7 +167,8 @@ function davix_io {
             log 1 "In ${IO_RETRY_DELAY} sec will retry a DAVIX ${VERB} to ${URL}"
             sleep ${IO_RETRY_DELAY}
         else
-            break
+            # Critical error: Excausted retries!
+            return 255
         fi
 
     done
@@ -218,8 +219,7 @@ function curl_io {
 
             # Check if that's actually a 404 error
             if [[ $ERROR_MSG == *"404"* ]]; then
-                log 1 "The queue is empty, will retry later"
-                return $RET
+                return 244
             fi
 
             # Otherwise retry
@@ -229,7 +229,8 @@ function curl_io {
             sleep ${IO_RETRY_DELAY}
 
         else
-            break
+            # Critical error: Excausted retries!
+            return 255
         fi
 
     done
@@ -241,10 +242,20 @@ function curl_io {
 function get_jobfile {
     local JOBDIR=$1
     local NEXT_JOB_ID=""
+    local RET=0
 
     # Get a job ID from the queue
     NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
-    if [ $? -ne 0 ]; then
+    RET=$?
+
+    # Check for 404 error
+    if [ $RET -eq 244 ]; then
+        log 2 "There are no more jobs in the queue"
+        return 1
+    elif [ $RET -eq 255 ]; then
+        log 3 "Giving up on contacting server"
+        return 255
+    elif [ $RET -ne 0 ]; then
         log 3 "Could not fetch next job ID from queue"
         return 1
     fi
@@ -258,9 +269,13 @@ function get_jobfile {
     # Download job file
     local JOB_FILE="${JOBDIR}/job.sh"
     davix_io GET "${DB_INPUT_URL}/${NEXT_JOB_ID}" "${JOB_FILE}"
+    RET=$?
 
     # If we got an error, return
-    if [ $? -ne 0 ]; then
+    if [ $RET -eq 255 ]; then
+        log 3 "Giving up on contacting server"
+        return 255
+    elif [ $RET -ne 0 ]; then
         log 3 "Could not download job contents from server"
         return 1
     fi
@@ -275,6 +290,7 @@ function upload_jobdir {
     local JOB_ID=$2
     local USER_DATA=$3
     local UPLOAD_URL=""
+    local RET=0
 
     # Archive job directory
     local ARCHIVE_FILE="$(mktemp -u).tgz"
@@ -283,20 +299,35 @@ function upload_jobdir {
     # Upload archive directory
     UPLOAD_URL="${DB_OUTPUT_URL}/${JOB_ID}.tgz?userdata=${USER_DATA}"
     davix_io PUT "${UPLOAD_URL}" "${ARCHIVE_FILE}"
-    if [ $? -ne 0 ]; then
+    RET=$?
+
+    # Handle errors
+    if [ $RET -eq 255 ]; then
+        log 3 "Giving up on contacting server"
+        return 255
+    elif [ $RET -ne 0 ]; then
         log 3 "Unable to upload job to ${UPLOAD_URL}"
-        return
+        return 1
     fi
 
     # Schedule the job to be picked-up by the output queue
     curl_io PUT "${DB_OUTPUT_QUEUE}" -F "userdata=${JOB_ID}" --header "userID: ${AUTH_USER}"
-    if [ $? -ne 0 ]; then
+    RET=$?
+
+    # Handle errors
+    if [ $RET -eq 255 ]; then
+        log 3 "Giving up on contacting server"
+        return 255
+    elif [ $RET -ne 0 ]; then
         log 3 "Unable to upload job description to ${DB_OUTPUT_QUEUE}"
-        return
+        return 1
     fi
 
     # Remove archive file
     rm "${ARCHIVE_FILE}"
+
+    # We are good
+    return 0
 }
 
 function cleanup {
@@ -328,9 +359,13 @@ while true; do
 
         # Get next job file (updates JOB_ID)
         get_jobfile "${WORKDIR}"
+        RET=$?
 
-        # Sleep on errors
-        if [ $? -ne 0 ]; then
+        # Exit on critical errors
+        if [ $RET -eq 255 ]; then
+            log 3 "A critical error occured, requesting reboot!"
+            exit 3
+        elif [ $RET -ne 0 ]; then
             log 1 "Sleeping for 1 minute"
             sleep 60
         fi
@@ -358,6 +393,10 @@ while true; do
     # Upload results
     log 1 "Uploading results"
     upload_jobdir "${WORKDIR}" "${JOB_ID}" "exitcode=$EXIT_CODE&vmid=${DUMBQ_VMID}"
+    if [ $? -eq 255 ]; then
+        log 3 "A critical error occured, requesting reboot!"
+        exit 3
+    fi
 
     # Cleanup
     log 1 "Cleaning-up workdir"
@@ -383,9 +422,9 @@ while true; do
         let BHP_TIMER*=2
         # If we have exceeded BHP_MAX_DELAY, abort!
         if [ $BHP_TIMER -gt ${BHP_MAX_DELAY} ]; then
-            log 3 "Exceeded BHP max timer, will reboot!"
+            log 3 "Exceeded BHP max timer, requesting reboot!"
             reboot
-            exit 1
+            exit 3
         fi
     else
         # Otherwise the job works fine, keep initial delay
