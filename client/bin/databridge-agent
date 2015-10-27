@@ -161,14 +161,18 @@ function davix_io {
         log 0 "Exited with $RET"
 
         # If this was an error, retry
-        if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
-            let RETRIES--
-            log 3 "$ERROR_MSG"
-            log 1 "In ${IO_RETRY_DELAY} sec will retry a DAVIX ${VERB} to ${URL}"
-            sleep ${IO_RETRY_DELAY}
+        if [[ $RET -ne 0 ]]; then
+            if [[ $RETRIES -gt 0 ]]; then
+                let RETRIES--
+                log 3 "$ERROR_MSG"
+                log 1 "In ${IO_RETRY_DELAY} sec will retry a DAVIX ${VERB} to ${URL}"
+                sleep ${IO_RETRY_DELAY}
+            else
+                # Critical error: Exhausted retries!
+                return 255
+            fi
         else
-            # Critical error: Excausted retries!
-            return 255
+            break
         fi
 
     done
@@ -215,24 +219,30 @@ function curl_io {
         exec 3>&-
 
         # If this was an error, retry
-        if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
+        if [[ $RET -ne 0 ]]; then
 
-            # Check if that's actually a 404 error
-            if [[ $ERROR_MSG == *"401"* ]]; then
-                return 241
-            elif [[ $ERROR_MSG == *"404"* ]]; then
-                return 244
+            if [[ $RETRIES -gt 0 ]]; then
+                
+                # Check if that's actually a 404 error
+                if [[ $ERROR_MSG == *"401"* ]]; then
+                    return 241
+                elif [[ $ERROR_MSG == *"404"* ]]; then
+                    return 244
+                fi
+
+                # Otherwise retry
+                let RETRIES--
+                log 3 "$ERROR_MSG"
+                log 1 "In ${IO_RETRY_DELAY} sec will retry a CURL ${VERB} to ${URL}"
+                sleep ${IO_RETRY_DELAY}
+                
+            else
+                # Critical error: Exhausted retries!
+                return 255
             fi
 
-            # Otherwise retry
-            let RETRIES--
-            log 3 "$ERROR_MSG"
-            log 1 "In ${IO_RETRY_DELAY} sec will retry a CURL ${VERB} to ${URL}"
-            sleep ${IO_RETRY_DELAY}
-
         else
-            # Critical error: Excausted retries!
-            return 255
+            break
         fi
 
     done
