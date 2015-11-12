@@ -119,8 +119,14 @@ function davix_io {
 
 	    # If this was an error, retry
 	    if [[ $RET -ne 0 && $RETRIES -gt 0 ]]; then
-	    	let RETRIES--
 	    	log 3 "$ERROR_MSG"
+
+            # There is no need to retry on 404 errors
+            if [[ $ERROR_MSG == *"404"* ]]; then
+                return 244
+            fi
+
+	    	let RETRIES--
 	    	log 1 "In 10 sec will retry a DAVIX ${VERB} to ${URL}"
 	    	sleep 10
 	    else
