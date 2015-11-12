@@ -63,6 +63,19 @@ IO_RETRIES=10
 # How long to wait between I/O Retries
 IO_RETRY_DELAY=30
 
+# --------------------------
+#  Network Heartbeat
+# --------------------------
+
+# A list of IP addresses to ping before assuming network is down
+HEARTBEAT_IPS="188.184.9.234 8.8.8.8"
+
+# How many times to rely on heartbeat before quitting
+HEARTBEAT_RETRIES=5
+
+# How long to wait after considering network inaccessible
+HEARTBEAT_DELAY=60
+
 ###############################################
 
 # DumbQ Metrics binary
@@ -363,6 +376,61 @@ function upload_jobdir {
     return 0
 }
 
+# Test if network is working by sending ping
+# probes to a list of heartbeat IPs
+function network_heartbeat {
+    # Ping heartbeat IPs
+    for IP in $HEARTBEAT_IPS; do
+        # Ping the IP address
+        ping -c1 $IP 1>/dev/null 2>&1
+        # If IP is alive we are good
+        [ $? -eq 0 ] && return 0
+    done
+    # No IP was alive
+    return 1
+}
+
+# Ensure that we have network
+function network_validate {
+    local ETH=$(route | grep default | awk '{print $8}')
+    local RETRIES=${HEARTBEAT_RETRIES}
+    [ -z "$ETH" ] && ETH="eth0"
+
+    # Send a heartbeat probe
+    network_heartbeat
+    if [ $? -eq 0 ]; then
+        # Exit
+        return 0
+    fi
+
+    # If we did not have network, check if this
+    # is caused by misconfigured network
+    log 2 "Network looks inaccessible. Trying to re-configure."
+    /sbin/ifdown ${ETH}
+    /sbin/ifup ${ETH}
+
+    # Check if it becomes available after a while
+    while [ $RETRIES -gt 0 ]; do
+
+        # Send a heartbeat probe
+        network_heartbeat
+        if [ $? -eq 0 ]; then
+            log 1 "Network recovered. Resuming operations."
+            return 0
+        fi
+
+        # Wait for a while
+        sleep $HEARTBEAT_DELAY
+
+        # Decrement counter
+        let RETRIES--
+
+    done
+
+    # We didn't manage to solve anything
+    return 1
+}
+
 function cleanup {
     # Remove directory
     [ -d ${WORKDIR} -a ${#WORKDIR} -gt 1 ] && rm -rf ${WORKDIR}
@@ -389,6 +457,13 @@ while true; do
 
         # Log attempts
         log 1 "Fetching next job in queue"
+
+        # Make sure we have network
+        network_validate
+        if [ $? -eq 1 ]; then
+            log 3 "Network is unaccessible, will exit"
+            exit 3
+        fi
 
         # Get next job file (updates JOB_ID)
         get_jobfile "${WORKDIR}"
@@ -422,6 +497,12 @@ while true; do
     # Get the timestamp when the job has finished
     TS_FINISHED=$(date +%s)
     let TS_DELTA=${TS_FINISHED}-${TS_STARTED}
+
+    # Make sure we have network
+    network_validate
+    if [ $? -eq 1 ]; then
+        log 2 "Network is unaccessible, but not giving up until we manage to upload output"
+    fi
 
     # Upload results
     log 1 "Uploading results"
