@@ -32,6 +32,18 @@ shift; shift;
 [ ! -z "$1" ] && DB_DOMAIN="$1" && shift
 
 # ------------------------
+# Davix config
+# ------------------------
+
+# Where to find davix binaries
+DAVIX_VERSION="0.5.0"
+DAVIX_ROOT="/cvmfs/sft.cern.ch/lcg/external/davix/${DAVIX_VERSION}/x86_64-slc6"
+DAVIX_BIN="${DAVIX_ROOT}/usr/bin"
+
+# Include davix libraries in environment
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${DAVIX_ROOT}/usr/lib64"
+
+# ------------------------
 #  Databridge URLs
 # ------------------------
 
@@ -140,7 +152,7 @@ function davix_io {
     shift; shift; shift
 
     # Extra args
-    local CMDLINE="-k --userlogin \"${AUTH_USER}\" --userpass \"${AUTH_PASSWORD}\""
+    local CMDLINE="--retry 1 -k --userlogin \"${AUTH_USER}\" --userpass \"${AUTH_PASSWORD}\""
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
@@ -155,15 +167,15 @@ function davix_io {
     case $VERB in
         GET)
             # Use davix-get to download a file
-            CMDLINE="davix-get $CMDLINE \"${URL}\" ${FILE}"
+            CMDLINE="${DAVIX_BIN}/davix-get $CMDLINE \"${URL}\" ${FILE}"
             ;;
         PUT)
             # Use davix-put to upload a file
-            CMDLINE="davix-put $CMDLINE ${FILE} \"${URL}\""
+            CMDLINE="${DAVIX_BIN}/davix-put $CMDLINE ${FILE} \"${URL}\""
             ;;
         DELETE)
             # Use davix-rm to delete a file
-            CMDLINE="davix-rm $CMDLINE \"${URL}\""
+            CMDLINE="${DAVIX_BIN}/davix-rm  $CMDLINE \"${URL}\""
             ;;
         *)
             log 3 "Unhandled DAVIX Verb '${VERB}'"

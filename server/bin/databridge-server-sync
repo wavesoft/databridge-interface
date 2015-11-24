@@ -70,7 +70,7 @@ function davix_io {
     shift; shift; shift
 
     # Extra args
-    local CMDLINE="-k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
+    local CMDLINE="--retry 1 -k --key \"${DATABRIDGE_SSL_KEY}\" --cert \"${DATABRIDGE_SSL_CERT}\""
     for (( i = 1; i <= $# ; i++ )); do
         eval ARG=\$$i
         if [[ $ARG =~ $WHITESPACE ]]
