@@ -308,19 +308,22 @@ function get_jobfile {
     NEXT_JOB_ID=$(curl_io GET "${DB_INPUT_QUEUE}" --header "userID: ${AUTH_USER}")
     RET=$?
 
-    # Check for 404 error
+    # Cases of 404,401,403 errors are special (recoverable)
     if [ $RET -eq 244 ]; then
         log 2 "There are no more jobs in the queue"
-        return 1
+        return 2
     elif [ $RET -eq 241 ]; then
         log 3 "The server refused our credentials"
-        return 1
+        return 2
     elif [ $RET -eq 243 ]; then
         log 3 "The server denied access"
-        return 1
+        return 2
+    # Cases of any other HTTP error sounds like trouble 
+    # CURLE_HTTP_RETURNED_ERROR (22)
     elif [ $RET -eq 22 ]; then
         log 3 "A server error occured"
         return 1
+    # Retry timeout is 255
     elif [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
         return 255
@@ -340,19 +343,20 @@ function get_jobfile {
     davix_io GET "${DB_INPUT_URL}/${NEXT_JOB_ID}" "${JOB_FILE}"
     RET=$?
 
-    # If we got an error, return
-    if [ $RET -eq 255 ]; then
-        log 3 "Giving up on contacting server"
-        return 255
-    elif [ $RET -eq 241 ]; then
+    # Cases of 404,401,403 errors are special (recoverable)
+    if [ $RET -eq 241 ]; then
         log 3 "The queue denied our credentials"
-        return 1
+        return 2
     elif [ $RET -eq 243 ]; then
         log 3 "The queue denied access"
-        return 1
+        return 2
     elif [ $RET -eq 244 ]; then
         log 3 "The queue file is gone"
-        return 1
+        return 2
+    # Retry timeout is 255
+    elif [ $RET -eq 255 ]; then
+        log 3 "Giving up on contacting server"
+        return 255
     elif [ $RET -ne 0 ]; then
         log 3 "Could not download job contents from server"
         return 1
@@ -510,6 +514,9 @@ while true; do
         if [ $RET -eq 255 ]; then
             log 3 "Unrecoverable error occured, will exit"
             exit 3
+        elif [ $RET -eq 2 ]; then
+            log 1 "A recoverable error occured, will retry in a second"
+            sleep 1
         elif [ $RET -ne 0 ]; then
             log 1 "Sleeping for 1 minute"
             sleep 60
