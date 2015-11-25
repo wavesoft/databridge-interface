@@ -323,7 +323,7 @@ function get_jobfile {
     elif [ $RET -eq 22 ]; then
         log 3 "A server error occured"
         return 1
-    # Retry timeout is 255
+    # Retry timeout returns 255
     elif [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
         return 255
@@ -353,7 +353,7 @@ function get_jobfile {
     elif [ $RET -eq 244 ]; then
         log 3 "The queue file is gone"
         return 2
-    # Retry timeout is 255
+    # Retry timeout returns 255
     elif [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
         return 255
