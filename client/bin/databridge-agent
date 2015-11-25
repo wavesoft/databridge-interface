@@ -197,10 +197,22 @@ function davix_io {
         # If this was an error, retry
         if [[ $RET -ne 0 ]]; then
             if [[ $RETRIES -gt 0 ]]; then
+
+                # Check if that's actually a 404 error
+                if [[ $ERROR_MSG == *"401"* ]]; then
+                    return 241
+                elif [[ $ERROR_MSG == *"403"* ]]; then
+                    return 243
+                elif [[ $ERROR_MSG == *"404"* ]]; then
+                    return 244
+                fi
+
+                # Otherwise retry
                 let RETRIES--
                 log 3 "$ERROR_MSG"
                 log 1 "In ${IO_RETRY_DELAY} sec will retry a DAVIX ${VERB} to ${URL}"
                 sleep ${IO_RETRY_DELAY}
+
             else
                 # Critical error: Exhausted retries!
                 return 255
@@ -260,6 +272,8 @@ function curl_io {
                 # Check if that's actually a 404 error
                 if [[ $ERROR_MSG == *"401"* ]]; then
                     return 241
+                elif [[ $ERROR_MSG == *"403"* ]]; then
+                    return 243
                 elif [[ $ERROR_MSG == *"404"* ]]; then
                     return 244
                 fi
@@ -301,6 +315,9 @@ function get_jobfile {
     elif [ $RET -eq 241 ]; then
         log 3 "The server refused our credentials"
         return 1
+    elif [ $RET -eq 243 ]; then
+        log 3 "The server denied access"
+        return 1
     elif [ $RET -eq 22 ]; then
         log 3 "A server error occured"
         return 1
@@ -327,6 +344,15 @@ function get_jobfile {
     if [ $RET -eq 255 ]; then
         log 3 "Giving up on contacting server"
         return 255
+    elif [ $RET -eq 241 ]; then
+        log 3 "The queue denied our credentials"
+        return 1
+    elif [ $RET -eq 243 ]; then
+        log 3 "The queue denied access"
+        return 1
+    elif [ $RET -eq 244 ]; then
+        log 3 "The queue file is gone"
+        return 1
     elif [ $RET -ne 0 ]; then
         log 3 "Could not download job contents from server"
         return 1
