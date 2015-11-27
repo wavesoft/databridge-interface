@@ -518,8 +518,10 @@ while true; do
             log 1 "A recoverable error occured, will retry in a second"
             sleep 1
         elif [ $RET -ne 0 ]; then
-            log 1 "Sleeping for 1 minute"
-            sleep 60
+            SLEEP_TIME=60
+            let SLEEP_TIME+=$((RANDOM%30))
+            log 1 "Sleeping for ${SLEEP_TIME} seconds"
+            sleep $SLEEP_TIME
         fi
 
     done
