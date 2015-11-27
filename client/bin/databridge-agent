@@ -311,7 +311,7 @@ function get_jobfile {
     # Cases of 404,401,403 errors are special (recoverable)
     if [ $RET -eq 244 ]; then
         log 2 "There are no more jobs in the queue"
-        return 2
+        return 3
     elif [ $RET -eq 241 ]; then
         log 3 "The server refused our credentials"
         return 2
